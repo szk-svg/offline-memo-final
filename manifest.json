@@ -1,0 +1,10 @@
+{
+  "name": "offline-memo-final",
+  "short_name": "Memo",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": []
+}

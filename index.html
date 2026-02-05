@@ -1,0 +1,1160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>offline-memo-final</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#111111">
+
+<style>
+:root{
+  --bg:#fff; --card:#fff; --line:#e9e9e9; --text:#111; --muted:#777;
+  --accent:#111; --danger:#d23b3b; --pill:#f4f4f4;
+  --shadow:0 8px 24px rgba(0,0,0,.06);
+  --r:16px; --tap:rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text)}
+
+.topbar{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:14px;z-index:10}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand h1{margin:0;font-size:22px;font-weight:900}
+
+.btn{border:1px solid var(--accent);background:#fff;color:var(--accent);
+  border-radius:14px;padding:10px 14px;font-weight:900;font-size:14px}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.ghost{border-color:var(--line)}
+.btn.danger{border-color:#f2c0c0;color:var(--danger)}
+.btn:active{background:var(--tap)}
+.btn[disabled]{opacity:.45}
+
+.container{padding:14px;max-width:980px;margin:0 auto}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:14px}
+
+.row{display:flex;gap:10px;align-items:center}
+.spacer{flex:1}
+
+.pill{background:var(--pill);border:1px solid var(--line);
+  border-radius:999px;padding:8px 10px;font-size:12px;color:var(--muted);font-weight:900}
+
+.muted{color:var(--muted);font-size:12px;font-weight:800}
+
+.search{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);font-size:15px}
+
+.list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.sectionLabel{margin:10px 0 4px;font-weight:900;color:#444;font-size:14px;display:flex;gap:8px;align-items:center}
+
+.rowCompact{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border:1px solid var(--line);
+  border-radius:14px;background:#fff
+}
+.rowLeft{flex:1;min-width:0}
+.rowTitle{font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rowMeta{font-size:12px;color:var(--muted);margin-top:2px;font-weight:800}
+.rowActions{display:flex;gap:6px;align-items:center}
+
+.miniBtn{
+  width:36px;height:36px;border-radius:12px;
+  border:1px solid var(--line);background:#fff;
+  display:grid;place-items:center;font-size:15px;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation;
+}
+.miniBtn:active{background:var(--tap)}
+.miniBtn.danger{border-color:#f2c0c0;color:var(--danger)}
+
+.hidden{display:none!important}
+
+/* editor */
+.input{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);font-size:16px;font-weight:900}
+.viewer,.editor{
+  border:1px solid var(--line);border-radius:16px;padding:12px;
+  min-height:46vh;font-size:16px;line-height:1.6;background:#fff;
+}
+.editor{outline:none}
+.viewer{white-space:normal}
+
+/* bottom toolbar (A案) */
+.bottomBar{
+  position:sticky;bottom:0;z-index:20;
+  background:var(--bg);border-top:1px solid var(--line);
+  padding:10px 14px;
+}
+.bottomBarInner{
+  max-width:980px;margin:0 auto;
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+.tool{
+  border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:900;
+  background:#fff;font-size:13px;
+}
+.tool:active{background:var(--tap)}
+.tool.active{border-color:var(--accent)}
+.hint{margin-left:auto}
+
+/* checkbox */
+.cbline{display:flex;gap:10px;margin:6px 0;align-items:flex-start}
+.cbox{
+  width:24px;height:24px;border:1px solid #bbb;border-radius:6px;
+  display:grid;place-items:center;font-weight:900;flex:0 0 24px;
+  user-select:none;-webkit-user-select:none;
+}
+.cbtext{flex:1;word-break:break-word}
+.cbline.done .cbtext{color:#777;text-decoration:line-through}
+
+/* toast */
+.toast{
+  position:fixed;left:50%;bottom:70px;transform:translateX(-50%);
+  background:rgba(0,0,0,.85);color:#fff;padding:10px 14px;
+  border-radius:999px;font-weight:900;font-size:13px;
+  opacity:0;transition:.2s;pointer-events:none;z-index:999;
+}
+.toast.show{opacity:1}
+
+/* drag */
+.dragging{opacity:.6}
+.ghost{
+  outline:2px dashed rgba(0,0,0,.25);
+  border-radius:12px;height:56px;
+}
+</style>
+</head>
+
+<body>
+<div class="topbar">
+  <div class="brand">
+    <h1>offline-memo-final</h1>
+    <div class="row">
+      <button id="btnExport" class="btn ghost" type="button">Export</button>
+      <button id="btnImport" class="btn ghost" type="button">Import</button>
+      <button id="btnNew" class="btn" type="button">新規</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <!-- LIST -->
+  <div id="screenList" class="panel">
+    <div class="row">
+      <div>
+        <div style="font-size:20px;font-weight:900">メモ一覧</div>
+        <div class="muted">（端末内のみ保存 / 通信なし）</div>
+      </div>
+      <div class="spacer"></div>
+      <div id="countPill" class="pill">0件</div>
+    </div>
+
+    <input id="elSearch" class="search" placeholder="検索（タイトル・本文）">
+
+    <div class="muted" style="margin-top:10px">
+      基本：更新順 / ★固定内も更新順内も ≡長押しで並び替え
+    </div>
+
+    <div id="notesEl" class="list"></div>
+  </div>
+
+  <!-- EDIT -->
+  <div id="screenEdit" class="panel hidden">
+    <div class="row" style="margin-bottom:10px">
+      <button id="btnBack" class="btn" type="button">戻る</button>
+      <div class="spacer"></div>
+      <button id="btnUndo" class="btn ghost" type="button">↶</button>
+      <button id="btnRedo" class="btn ghost" type="button">↷</button>
+      <button id="btnDeleteInEdit" class="btn danger" type="button">🗑</button>
+      <button id="btnSave" class="btn primary" type="button">保存</button>
+    </div>
+
+    <input id="elTitle" class="input" placeholder="タイトル">
+
+    <div id="viewer" class="viewer" style="margin-top:10px"></div>
+    <div id="editor" class="editor hidden" contenteditable="true" spellcheck="false" style="margin-top:10px"></div>
+
+    <div class="muted" style="margin-top:10px">
+      ※ チェックは閲覧/編集どちらでもON/OFF（保存ボタン押すまで未保存）
+    </div>
+  </div>
+</div>
+
+<!-- Bottom toolbar (A案) -->
+<div id="bottomBar" class="bottomBar hidden">
+  <div class="bottomBarInner">
+    <button id="btnBlack" class="tool active" type="button">黒</button>
+    <button id="btnRed" class="tool" type="button">赤</button>
+    <button id="btnCb" class="tool" type="button">☑ チェック化</button>
+    <div class="spacer"></div>
+    <div id="saveState" class="muted hint">保存済み</div>
+  </div>
+</div>
+
+<input id="fileImport" type="file" class="hidden" accept=".json,.txt,application/json,text/plain">
+<div id="toast" class="toast">OK</div>
+
+<script>
+  /* =========================
+   offline-memo-final v7
+   - ★固定セクション：pinnedIds（ドラッグで並び替え）
+   - 更新順セクション：normalOrderIds（ドラッグで並び替え）
+   - 保存(更新)すると normalOrderIds の先頭に自動で上がる
+   ========================= */
+
+const STORAGE_KEY = "offline_memo_final_v7";
+
+/* utils */
+function nowTs(){ return Date.now(); }
+function pad2(n){ return String(n).padStart(2,"0"); }
+function fmt(ts){
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function stampForFile(){
+  const d = new Date();
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+function uid(){
+  return "n_" + Math.random().toString(36).slice(2,10) + "_" + Date.now().toString(36);
+}
+function safeParse(json, fallback){
+  try{ return JSON.parse(json); }catch(_){ return fallback; }
+}
+function stripTags(html){
+  const div = document.createElement("div");
+  div.innerHTML = html || "";
+  return (div.textContent || "").replace(/\s+/g," ").trim();
+}
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+
+/* toast */
+const toastEl = document.getElementById("toast");
+let toastTimer=null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1200);
+}
+
+/* DOM refs */
+const screenList = document.getElementById("screenList");
+const screenEdit = document.getElementById("screenEdit");
+const bottomBar = document.getElementById("bottomBar");
+
+const btnNew = document.getElementById("btnNew");
+const btnExport = document.getElementById("btnExport");
+const btnImport = document.getElementById("btnImport");
+const fileImport = document.getElementById("fileImport");
+
+const countPill = document.getElementById("countPill");
+const elSearch = document.getElementById("elSearch");
+const notesEl = document.getElementById("notesEl");
+
+const btnBack = document.getElementById("btnBack");
+const btnSave = document.getElementById("btnSave");
+const btnDeleteInEdit = document.getElementById("btnDeleteInEdit");
+const btnUndo = document.getElementById("btnUndo");
+const btnRedo = document.getElementById("btnRedo");
+
+const elTitle = document.getElementById("elTitle");
+const viewer = document.getElementById("viewer");
+const editor = document.getElementById("editor");
+const saveState = document.getElementById("saveState");
+const btnBlack = document.getElementById("btnBlack");
+const btnRed = document.getElementById("btnRed");
+const btnCb = document.getElementById("btnCb");
+
+/* store */
+function normalizeStore(s){
+  if (!s || typeof s !== "object") s = {};
+  if (!Array.isArray(s.notes)) s.notes = [];
+  if (!Array.isArray(s.pinnedIds)) s.pinnedIds = [];
+  if (!Array.isArray(s.normalOrderIds)) s.normalOrderIds = [];
+
+  const t = nowTs();
+  s.notes.forEach((n)=>{
+    if (!n.id) n.id = uid();
+    if (typeof n.title !== "string") n.title = "";
+    if (typeof n.bodyHtml !== "string") n.bodyHtml = "";
+    if (typeof n.createdAt !== "number") n.createdAt = t;
+    if (typeof n.updatedAt !== "number") n.updatedAt = t;
+  });
+
+  const set = new Set(s.notes.map(n=>n.id));
+  s.pinnedIds = s.pinnedIds.filter(id=>set.has(id));
+  s.normalOrderIds = s.normalOrderIds.filter(id=>set.has(id) && !s.pinnedIds.includes(id));
+
+  // normalOrderIds が空なら、更新順で初期化
+  if (s.normalOrderIds.length === 0){
+    s.normalOrderIds = s.notes
+      .filter(n=>!s.pinnedIds.includes(n.id))
+      .sort((a,b)=>b.updatedAt-a.updatedAt)
+      .map(n=>n.id);
+  }
+
+  return s;
+}
+function loadStore(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return normalizeStore(safeParse(raw, {notes:[], pinnedIds:[], normalOrderIds:[]}));
+}
+function saveStore(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+let store = loadStore();
+
+function getNote(id){
+  return store.notes.find(n=>n.id===id) || null;
+}
+function ensureAtLeastOne(){
+  if (store.notes.length) return;
+  const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
+  store.notes.push(n);
+  store.normalOrderIds = [n.id];
+  saveStore();
+}
+
+function isPinned(id){ return store.pinnedIds.includes(id); }
+
+function pinToggle(id){
+  if (isPinned(id)){
+    // unpin -> normalへ（先頭）
+    store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
+    store.normalOrderIds.unshift(id);
+  }else{
+    // pin -> pinnedへ（先頭）
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
+    store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
+    store.pinnedIds.unshift(id);
+  }
+}
+
+/* UI state */
+let currentId=null;
+let isEditing=false;
+let dirty=false;
+
+let savedTitle="", savedHtml="";
+let draftTitle="", draftHtml="";
+
+/* dirty + screens */
+function updateDirtyFlag(){
+  dirty = (draftTitle !== savedTitle) || (draftHtml !== savedHtml);
+  saveState.textContent = dirty ? "未保存" : "保存済み";
+}
+
+function showList(){
+  screenEdit.classList.add("hidden");
+  bottomBar.classList.add("hidden");
+  screenList.classList.remove("hidden");
+
+  currentId = null;
+  isEditing = false;
+  dirty = false;
+
+  renderList();
+  history.replaceState({screen:"list"}, "");
+}
+
+function setMode(edit){
+  isEditing = edit;
+  if (edit){
+    viewer.classList.add("hidden");
+    editor.classList.remove("hidden");
+    editor.innerHTML = draftHtml;
+    normalizeCbLines(editor);
+    editor.focus();
+  }else{
+    editor.classList.add("hidden");
+    viewer.classList.remove("hidden");
+    viewer.innerHTML = draftHtml;
+    normalizeCbLines(viewer);
+  }
+}
+
+function addHeading(text){
+  const lab = document.createElement("div");
+  lab.className = "sectionLabel";
+  lab.textContent = text;
+  notesEl.appendChild(lab);
+}
+
+/* list builder */
+function buildList(){
+  const q = (elSearch.value||"").trim().toLowerCase();
+  const notes = store.notes.slice();
+  const byId = new Map(notes.map(n=>[n.id,n]));
+
+  let pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
+  let normalIds = store.normalOrderIds.slice();
+
+  // 念のため：pinnedがnormalに混ざってたら除外
+  normalIds = normalIds.filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
+
+  let normal = normalIds.map(id=>byId.get(id)).filter(Boolean);
+
+  // 検索時：並び替えは“表示上”だけ更新順に寄せる（ドラッグ無効）
+  if (q){
+    const filtered = notes.filter(n=>{
+      const t = (n.title||"").toLowerCase();
+      const b = stripTags(n.bodyHtml||"").toLowerCase();
+      return t.includes(q) || b.includes(q);
+    });
+    const filteredSet = new Set(filtered.map(n=>n.id));
+    pinned = pinned.filter(n=>filteredSet.has(n.id));
+    normal = filtered
+      .filter(n=>!store.pinnedIds.includes(n.id))
+      .sort((a,b)=>b.updatedAt-a.updatedAt);
+    return { pinned, normal, searching:true };
+  }
+
+  return { pinned, normal, searching:false };
+}
+
+/* row */
+function renderRow(note, searching){
+  const row = document.createElement("div");
+  row.className = "rowCompact";
+  row.dataset.id = note.id;
+
+  const left = document.createElement("div");
+  left.className = "rowLeft";
+
+  const title = document.createElement("div");
+  title.className = "rowTitle";
+  title.textContent = (note.title||"").trim() ? note.title : "（無題）";
+
+  const meta = document.createElement("div");
+  meta.className = "rowMeta";
+  meta.textContent = `更新: ${fmt(note.updatedAt)}`;
+
+  left.append(title, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "rowActions";
+
+  const dragBtn = document.createElement("button");
+  dragBtn.className = "miniBtn";
+  dragBtn.type="button";
+  dragBtn.textContent = "≡";
+  dragBtn.title = "長押しで並び替え";
+
+  const starBtn = document.createElement("button");
+  starBtn.className = "miniBtn";
+  starBtn.type="button";
+  starBtn.textContent = isPinned(note.id) ? "★" : "☆";
+  starBtn.title = "固定";
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "miniBtn danger";
+  delBtn.type="button";
+  delBtn.textContent = "🗑";
+
+  actions.append(dragBtn, starBtn, delBtn);
+  row.append(left, actions);
+
+  row.addEventListener("click", ()=> openNote(note.id));
+
+  starBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    pinToggle(note.id);
+    saveStore();
+    renderList();
+    toast(isPinned(note.id) ? "固定しました" : "固定を解除しました");
+  });
+
+  delBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    if (!confirm("削除しますか？")) return;
+    store.notes = store.notes.filter(n=>n.id!==note.id);
+    store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
+    ensureAtLeastOne();
+    saveStore();
+    renderList();
+    toast("削除しました");
+  });
+
+  // ドラッグ（検索中は無効）
+  if (!searching){
+    attachManualDrag(dragBtn, row, note);
+  }else{
+    dragBtn.style.opacity = "0.35";
+  }
+
+  return row;
+}
+
+/* render */
+function renderList(){
+  countPill.textContent = `${store.notes.length}件`;
+  notesEl.innerHTML = "";
+
+  const { pinned, normal, searching } = buildList();
+
+  if (pinned.length){
+    addHeading("★ 固定");
+    pinned.forEach(n=> notesEl.appendChild(renderRow(n, searching)));
+  }
+  addHeading("更新順");
+  if (!normal.length){
+    const m = document.createElement("div");
+    m.className = "muted";
+    m.style.padding = "6px 2px";
+    m.textContent = searching ? "一致するメモがありません" : "メモがありません（右上の新規から作成）";
+    notesEl.appendChild(m);
+  }else{
+    normal.forEach(n=> notesEl.appendChild(renderRow(n, searching)));
+  }
+}
+
+/* open */
+function openNote(id){
+  const note = getNote(id);
+  if (!note){ toast("メモが見つかりません"); return; }
+  currentId = id;
+
+  draftTitle = note.title || "";
+  draftHtml  = note.bodyHtml || "";
+  savedTitle = draftTitle;
+  savedHtml  = draftHtml;
+
+  elTitle.value = draftTitle;
+  viewer.innerHTML = draftHtml;
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(viewer);
+  normalizeCbLines(editor);
+
+  screenList.classList.add("hidden");
+  screenEdit.classList.remove("hidden");
+  bottomBar.classList.remove("hidden");
+
+  setMode(false);
+  resetUndoRedo();
+  updateDirtyFlag();
+
+  history.pushState({screen:"edit", id: currentId}, "");
+}
+
+/* events */
+elSearch.addEventListener("input", ()=> renderList());
+
+btnNew.addEventListener("click", ()=>{
+  const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
+  store.notes.unshift(n);
+  // 新規は更新順の先頭へ
+  store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+  store.normalOrderIds.unshift(n.id);
+
+  saveStore();
+  renderList();
+  openNote(n.id);
+  setMode(true);
+
+  draftTitle = "";
+  draftHtml = "";
+  savedTitle = "";
+  savedHtml = "";
+  elTitle.value = "";
+  editor.innerHTML = "";
+  viewer.innerHTML = "";
+  updateDirtyFlag();
+  resetUndoRedo();
+});
+/* =========================
+   Part3: checkbox + color + undo/redo + save/back
+   ========================= */
+
+/* checkbox helpers */
+function normalizeCbLines(root){
+  root.querySelectorAll(".cbline").forEach(line=>{
+    const done = line.getAttribute("data-done") === "true";
+    line.classList.toggle("done", done);
+    const box = line.querySelector(".cbox");
+    if (box) box.textContent = done ? "☑" : "☐";
+  });
+}
+function toggleCbLine(line){
+  const done = line.getAttribute("data-done") === "true";
+  const next = !done;
+  line.setAttribute("data-done", next ? "true" : "false");
+  line.classList.toggle("done", next);
+  const box = line.querySelector(".cbox");
+  if (box) box.textContent = next ? "☑" : "☐";
+}
+
+/* sync draft */
+function syncDraftFromCurrent(){
+  draftTitle = elTitle.value || "";
+  draftHtml = isEditing ? editor.innerHTML : viewer.innerHTML;
+
+  viewer.innerHTML = draftHtml;
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(viewer);
+  normalizeCbLines(editor);
+
+  updateDirtyFlag();
+}
+
+/* Undo/Redo */
+let undoStack = [];
+let redoStack = [];
+const UNDO_LIMIT = 80;
+let pushTimer = null;
+
+function refreshUndoButtons(){
+  btnUndo.disabled = undoStack.length <= 1;
+  btnRedo.disabled = redoStack.length === 0;
+  btnUndo.style.opacity = btnUndo.disabled ? "0.45" : "1";
+  btnRedo.style.opacity = btnRedo.disabled ? "0.45" : "1";
+}
+function pushUndoSnapshot(){
+  const snap = { title: draftTitle, html: draftHtml };
+  const last = undoStack[undoStack.length-1];
+  if (last && last.title===snap.title && last.html===snap.html) return;
+  undoStack.push(snap);
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  refreshUndoButtons();
+}
+function schedulePushSnapshot(){
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(()=> pushUndoSnapshot(), 280);
+}
+function resetUndoRedo(){
+  undoStack = [];
+  redoStack = [];
+  pushUndoSnapshot(); // init
+  refreshUndoButtons();
+}
+
+btnUndo.addEventListener("click", ()=>{
+  if (undoStack.length <= 1) return;
+  redoStack.push({ title: draftTitle, html: draftHtml });
+  undoStack.pop();
+  const prev = undoStack[undoStack.length-1];
+  draftTitle = prev.title;
+  draftHtml  = prev.html;
+
+  elTitle.value = draftTitle;
+  viewer.innerHTML = draftHtml;
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(viewer);
+  normalizeCbLines(editor);
+
+  updateDirtyFlag();
+  refreshUndoButtons();
+});
+btnRedo.addEventListener("click", ()=>{
+  if (redoStack.length === 0) return;
+  const next = redoStack.pop();
+  undoStack.push({ title: next.title, html: next.html });
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+
+  draftTitle = next.title;
+  draftHtml  = next.html;
+
+  elTitle.value = draftTitle;
+  viewer.innerHTML = draftHtml;
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(viewer);
+  normalizeCbLines(editor);
+
+  updateDirtyFlag();
+  refreshUndoButtons();
+});
+
+/* viewer/editor behavior */
+viewer.addEventListener("click", (e)=>{
+  const box = e.target.closest && e.target.closest(".cbox");
+  const line = e.target.closest && e.target.closest(".cbline");
+  if (line && box){
+    pushUndoSnapshot();
+    toggleCbLine(line);
+    draftHtml = viewer.innerHTML;
+    editor.innerHTML = draftHtml;
+    normalizeCbLines(editor);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+    return;
+  }
+  setMode(true);
+});
+
+editor.addEventListener("click", (e)=>{
+  const box = e.target.closest && e.target.closest(".cbox");
+  const line = e.target.closest && e.target.closest(".cbline");
+  if (line && box){
+    pushUndoSnapshot();
+    toggleCbLine(line);
+    draftHtml = editor.innerHTML;
+    viewer.innerHTML = draftHtml;
+    normalizeCbLines(viewer);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+  }
+});
+
+/* ---- Enter fix (inside checkbox line) ----
+   cbline内でEnterすると変な空白になる端末があるので、
+   Enter時は cbline の“外”に空行を作ってそこへカーソルを移す
+*/
+editor.addEventListener("keydown", (e)=>{
+  if (e.key !== "Enter") return;
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  if (!sel.isCollapsed) return; // 選択範囲ありは通常挙動
+
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+
+  const line = (node && node.nodeType)
+    ? (node.nodeType === 1 ? node : node.parentElement).closest?.(".cbline")
+    : null;
+
+  if (!line) return; // cbline外は通常の改行に任せる
+
+  // cbline内のEnterはブラウザに任せない
+  e.preventDefault();
+
+  // 次の行（空行）を cbline の直後に作る
+  const newLine = document.createElement("div");
+  newLine.innerHTML = "<br>";
+  line.after(newLine);
+
+  // カーソルを空行へ
+  const r2 = document.createRange();
+  r2.setStart(newLine, 0);
+  r2.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(r2);
+
+  // draft反映
+  draftHtml = editor.innerHTML;
+  viewer.innerHTML = draftHtml;
+  normalizeCbLines(viewer);
+  updateDirtyFlag();
+  schedulePushSnapshot();
+});
+
+editor.addEventListener("input", ()=>{
+  draftHtml = editor.innerHTML;
+  updateDirtyFlag();
+  schedulePushSnapshot();
+});
+elTitle.addEventListener("input", ()=>{
+  draftTitle = elTitle.value || "";
+  updateDirtyFlag();
+  schedulePushSnapshot();
+});
+
+/* color */
+function applyColor(color){
+  if (!isEditing) setMode(true);
+  pushUndoSnapshot();
+  editor.focus();
+  try{ document.execCommand("styleWithCSS", false, true); }catch(_){}
+  document.execCommand("foreColor", false, color);
+
+  draftHtml = editor.innerHTML;
+  updateDirtyFlag();
+  schedulePushSnapshot();
+}
+btnBlack.addEventListener("click", ()=>{
+  btnBlack.classList.add("active");
+  btnRed.classList.remove("active");
+  applyColor("#111111");
+});
+btnRed.addEventListener("click", ()=>{
+  btnRed.classList.add("active");
+  btnBlack.classList.remove("active");
+  applyColor("#d23b3b");
+});
+
+/* --- 行取得（強化版）
+   editor直下のテキストノードでも “行” として拾えるようにする
+*/
+function getCurrentBlockInEditor(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+
+  let node = range.startContainer;
+  if (!node) return null;
+
+  // text node -> element
+  if (node.nodeType === 3){
+    const parent = node.parentNode;
+    if (parent === editor){
+      // editor直下のテキストなら、行としてdivに包んで返す
+      const wrap = document.createElement("div");
+      editor.insertBefore(wrap, node);
+      wrap.appendChild(node);
+      return wrap;
+    }
+    node = parent;
+  }
+
+  // 近いブロックへ上がる
+  while (node && node !== editor){
+    const tag = (node.tagName||"").toUpperCase();
+    if (tag === "DIV" || tag === "P" || tag === "LI") return node;
+    node = node.parentNode;
+  }
+
+  // それでもダメなら editor 自体は行扱いしない
+  return null;
+}
+
+btnCb.addEventListener("click", ()=>{
+  if (!isEditing) setMode(true);
+  editor.focus();
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0){
+    toast("文字を選択するか、行にカーソルを置いて押してね");
+    return;
+  }
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)){
+    toast("本文内で操作してね");
+    return;
+  }
+
+  pushUndoSnapshot();
+
+  const makeLine = (text)=>{
+    const line = document.createElement("div");
+    line.className = "cbline";
+    line.setAttribute("data-done","false");
+
+    const box = document.createElement("span");
+    box.className = "cbox";
+    box.textContent = "☐";
+    box.contentEditable = "false";
+
+    const span = document.createElement("span");
+    span.className = "cbtext";
+    span.textContent = text;
+
+    line.appendChild(box);
+    line.appendChild(span);
+    return line;
+  };
+
+  const selectedText = sel.toString().trim();
+
+  if (selectedText){
+    // 選択あり：選択範囲をチェック行へ
+    const line = makeLine(selectedText);
+    range.deleteContents();
+    range.insertNode(line);
+
+    const br = document.createElement("br");
+    line.after(br);
+
+    sel.removeAllRanges();
+    const r2 = document.createRange();
+    r2.setStartAfter(br);
+    r2.collapse(true);
+    sel.addRange(r2);
+  }else{
+    // 選択なし：カーソル行をチェック化（強化版）
+    const block = getCurrentBlockInEditor();
+    if (!block){
+      toast("行にカーソルを置いて押してね");
+      return;
+    }
+    const text = (block.textContent||"").trim();
+    if (!text){
+      toast("空の行はチェック化できないよ");
+      return;
+    }
+    const line = makeLine(text);
+    block.replaceWith(line);
+  }
+
+  draftHtml = editor.innerHTML;
+  viewer.innerHTML = draftHtml;
+  normalizeCbLines(viewer);
+  updateDirtyFlag();
+  schedulePushSnapshot();
+});
+
+/* save/back/delete */
+function confirmDiscardIfDirty(){
+  if (!dirty) return true;
+  return confirm("更新は破棄されますがよろしいですか？");
+}
+
+function saveCurrent(){
+  const note = getNote(currentId);
+  if (!note) return;
+
+  syncDraftFromCurrent();
+
+  note.title = draftTitle;
+  note.bodyHtml = draftHtml;
+  note.updatedAt = nowTs();
+
+  // ★固定じゃないなら、保存(更新)したメモを更新順セクションの先頭へ上げる
+  if (!isPinned(note.id)){
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
+    store.normalOrderIds.unshift(note.id);
+  }
+
+  saveStore();
+
+  savedTitle = draftTitle;
+  savedHtml  = draftHtml;
+  updateDirtyFlag();
+
+  toast("保存しました");
+  setMode(false);
+  resetUndoRedo();
+}
+
+btnSave.addEventListener("click", ()=> saveCurrent());
+
+btnBack.addEventListener("click", ()=>{
+  if (!confirmDiscardIfDirty()) return;
+  showList();
+});
+
+btnDeleteInEdit.addEventListener("click", ()=>{
+  const note = getNote(currentId);
+  if (!note) return;
+  const name = (note.title||"").trim() ? note.title : "（無題）";
+  if (!confirm(`「${name}」を削除しますか？\nよろしいですか？`)) return;
+
+  store.notes = store.notes.filter(n=>n.id!==note.id);
+  store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
+  store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
+  ensureAtLeastOne();
+  saveStore();
+  toast("削除しました");
+  showList();
+});
+/* =========================
+   Part4: export/import + drag + boot + hardware back
+   ========================= */
+
+/* Export / Import
+   - .json: 置き換えインポート
+   - .txt : 1つのメモとして取り込み（追記）
+*/
+btnExport.addEventListener("click", ()=>{
+  if (!screenEdit.classList.contains("hidden") && dirty){
+    const ok = confirm("編集中の未保存内容があります。\n保存せずにExportすると未保存分は入りません。\n続けますか？");
+    if (!ok) return;
+  }
+
+  const payload = { version: 1, exportedAt: nowTs(), data: store };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `offline-memo-backup-${stampForFile()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+  toast("書き出しました");
+});
+
+btnImport.addEventListener("click", ()=>{
+  fileImport.value = "";
+  fileImport.click();
+});
+
+fileImport.addEventListener("change", async ()=>{
+  const f = fileImport.files && fileImport.files[0];
+  if (!f) return;
+
+  const name = (f.name||"").toLowerCase();
+
+  try{
+    const text = await f.text();
+
+    if (name.endsWith(".txt")){
+      const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
+      const n = { id: uid(), title: f.name.replace(/\.txt$/i,""), bodyHtml: body, createdAt: nowTs(), updatedAt: nowTs() };
+      store.notes.unshift(n);
+
+      // 取り込みは更新順セクション先頭へ
+      store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+      store.normalOrderIds.unshift(n.id);
+
+      saveStore();
+      renderList();
+      toast(".txt を取り込みました");
+      return;
+    }
+
+    const obj = safeParse(text, null);
+    if (!obj || !obj.data) throw new Error("invalid");
+    store = normalizeStore(obj.data);
+
+    ensureAtLeastOne();
+    saveStore();
+    toast("インポートしました");
+    showList();
+  }catch(e){
+    alert("インポート失敗：ファイル形式が違うか壊れてます");
+  }
+});
+
+/* --- Drag
+   - ★固定セクション：pinnedIds を並び替え
+   - 更新順セクション：normalOrderIds を並び替え
+*/
+let dragState = null;
+
+function attachManualDrag(handleEl, rowEl, note){
+  const HOLD_MS = 220;
+  let timer = null;
+
+  const start = (e)=>{
+    if ((elSearch.value||"").trim()) return; // 検索中は無効
+    e.preventDefault();
+    e.stopPropagation();
+
+    timer = setTimeout(()=>{
+      beginDrag(rowEl, note);
+
+      document.addEventListener("touchmove", onDragMove, {passive:false});
+      document.addEventListener("touchend", onDragEnd);
+      document.addEventListener("pointermove", onDragMove);
+      document.addEventListener("pointerup", onDragEnd);
+    }, HOLD_MS);
+  };
+
+  const cancel = ()=>{
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  handleEl.addEventListener("touchstart", start, {passive:false});
+  handleEl.addEventListener("touchend", cancel);
+  handleEl.addEventListener("touchmove", cancel);
+
+  handleEl.addEventListener("pointerdown", start);
+  handleEl.addEventListener("pointerup", cancel);
+  handleEl.addEventListener("pointercancel", cancel);
+}
+
+function beginDrag(rowEl, note){
+  const pinned = isPinned(note.id);
+
+  const ghost = document.createElement("div");
+  ghost.className = "ghost";
+  ghost.style.height = rowEl.getBoundingClientRect().height + "px";
+
+  rowEl.after(ghost);
+  rowEl.classList.add("dragging");
+
+  dragState = { rowEl, note, ghost, pinned };
+  toast("ドラッグで並び替え");
+}
+
+function onDragMove(e){
+  if (!dragState) return;
+  if (e.cancelable) e.preventDefault();
+
+  const y = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+
+  const rows = Array.from(notesEl.querySelectorAll(".rowCompact"))
+    .filter(el => el !== dragState.rowEl)
+    .filter(el => {
+      const id = el.dataset.id;
+      return dragState.pinned ? isPinned(id) : !isPinned(id);
+    });
+
+  let target = null;
+  for (const r of rows){
+    const rect = r.getBoundingClientRect();
+    const mid = rect.top + rect.height/2;
+    if (y < mid){ target = r; break; }
+  }
+
+  if (target){
+    notesEl.insertBefore(dragState.ghost, target);
+  }else{
+    const last = rows[rows.length-1];
+    if (last) last.after(dragState.ghost);
+  }
+}
+
+function onDragEnd(){
+  if (!dragState) return;
+
+  document.removeEventListener("touchmove", onDragMove);
+  document.removeEventListener("touchend", onDragEnd);
+  document.removeEventListener("pointermove", onDragMove);
+  document.removeEventListener("pointerup", onDragEnd);
+
+  dragState.rowEl.classList.remove("dragging");
+
+  // ゴースト位置に本体を移動
+  dragState.ghost.replaceWith(dragState.rowEl);
+
+  const ids = Array.from(notesEl.querySelectorAll(".rowCompact"))
+    .map(el=>el.dataset.id);
+
+  if (dragState.pinned){
+    // pinnedセクションの順に再構築
+    store.pinnedIds = ids.filter(id=>isPinned(id));
+  }else{
+    // normalセクションの順に再構築（pinnedを除外）
+    store.normalOrderIds = ids.filter(id=>!isPinned(id));
+  }
+
+  saveStore();
+  dragState = null;
+  renderList();
+  toast("並び替えました");
+}
+
+/* hardware back */
+window.addEventListener("popstate", ()=>{
+  const inEdit = !screenEdit.classList.contains("hidden");
+  if (!inEdit) return;
+
+  if (!confirmDiscardIfDirty()){
+    history.pushState({screen:"edit", id: currentId}, "");
+    return;
+  }
+  showList();
+});
+
+window.addEventListener("beforeunload", (e)=>{
+  if (!dirty) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+/* boot */
+function boot(){
+  ensureAtLeastOne();
+  saveStore();
+  renderList();
+  history.replaceState({screen:"list"}, "");
+}
+boot();
+
+// ===== Service Worker 登録（1回だけ）=====
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    });
+  }
+
+</script>
+</body>
+</html>

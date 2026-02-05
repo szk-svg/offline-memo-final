@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>offline-memo-final</title>
-<link rel="manifest" href="./manifest.json">
+
+<link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#111111">
 
 <style>
@@ -193,12 +194,14 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
 <script>
   /* =========================
-   offline-memo-final v7
-   - ★固定セクション：pinnedIds（ドラッグで並び替え）
-   - 更新順セクション：normalOrderIds（ドラッグで並び替え）
-   - 保存(更新)すると normalOrderIds の先頭に自動で上がる
+   offline-memo-final v7 (backup1 update)
+   - pinnedIds / normalOrderIds を保持
+   - 保存(更新)で通常メモは更新順セクション先頭へ
+   - PWA: cache/update/offline 安定化
    ========================= */
 
+/* ★ここを更新のたびに変える（v7.0 -> v7.1 みたいに） */
+const APP_VERSION = "v7.1";
 const STORAGE_KEY = "offline_memo_final_v7";
 
 /* utils */
@@ -234,7 +237,7 @@ function toast(msg){
   toastEl.textContent = msg;
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1200);
+  toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1400);
 }
 
 /* DOM refs */
@@ -285,13 +288,25 @@ function normalizeStore(s){
   s.pinnedIds = s.pinnedIds.filter(id=>set.has(id));
   s.normalOrderIds = s.normalOrderIds.filter(id=>set.has(id) && !s.pinnedIds.includes(id));
 
-  // normalOrderIds が空なら、更新順で初期化
   if (s.normalOrderIds.length === 0){
     s.normalOrderIds = s.notes
       .filter(n=>!s.pinnedIds.includes(n.id))
       .sort((a,b)=>b.updatedAt-a.updatedAt)
       .map(n=>n.id);
   }
+
+  // 念のため：notesにあるのにorder配列にないIDを補完（末尾）
+  const allIds = new Set([...s.pinnedIds, ...s.normalOrderIds]);
+  s.notes.forEach(n=>{
+    if (!allIds.has(n.id)){
+      if (s.pinnedIds.includes(n.id)) return;
+      s.normalOrderIds.push(n.id);
+      allIds.add(n.id);
+    }
+  });
+
+  // normalにpinnedが混ざったら除去
+  s.normalOrderIds = s.normalOrderIds.filter(id=>!s.pinnedIds.includes(id));
 
   return s;
 }
@@ -319,12 +334,10 @@ function isPinned(id){ return store.pinnedIds.includes(id); }
 
 function pinToggle(id){
   if (isPinned(id)){
-    // unpin -> normalへ（先頭）
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
     store.normalOrderIds.unshift(id);
   }else{
-    // pin -> pinnedへ（先頭）
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
     store.pinnedIds.unshift(id);
@@ -388,14 +401,9 @@ function buildList(){
   const byId = new Map(notes.map(n=>[n.id,n]));
 
   let pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
-  let normalIds = store.normalOrderIds.slice();
-
-  // 念のため：pinnedがnormalに混ざってたら除外
-  normalIds = normalIds.filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
-
+  let normalIds = store.normalOrderIds.slice().filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
   let normal = normalIds.map(id=>byId.get(id)).filter(Boolean);
 
-  // 検索時：並び替えは“表示上”だけ更新順に寄せる（ドラッグ無効）
   if (q){
     const filtered = notes.filter(n=>{
       const t = (n.title||"").toLowerCase();
@@ -477,7 +485,6 @@ function renderRow(note, searching){
     toast("削除しました");
   });
 
-  // ドラッグ（検索中は無効）
   if (!searching){
     attachManualDrag(dragBtn, row, note);
   }else{
@@ -544,7 +551,7 @@ elSearch.addEventListener("input", ()=> renderList());
 btnNew.addEventListener("click", ()=>{
   const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
   store.notes.unshift(n);
-  // 新規は更新順の先頭へ
+
   store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
   store.normalOrderIds.unshift(n.id);
 
@@ -564,7 +571,7 @@ btnNew.addEventListener("click", ()=>{
   resetUndoRedo();
 });
 /* =========================
-   Part3: checkbox + color + undo/redo + save/back
+   checkbox + color + undo/redo + save/back
    ========================= */
 
 /* checkbox helpers */
@@ -626,7 +633,7 @@ function schedulePushSnapshot(){
 function resetUndoRedo(){
   undoStack = [];
   redoStack = [];
-  pushUndoSnapshot(); // init
+  pushUndoSnapshot();
   refreshUndoButtons();
 }
 
@@ -697,16 +704,13 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter fix (inside checkbox line) ----
-   cbline内でEnterすると変な空白になる端末があるので、
-   Enter時は cbline の“外”に空行を作ってそこへカーソルを移す
-*/
+/* ---- Enter fix (inside checkbox line) ---- */
 editor.addEventListener("keydown", (e)=>{
   if (e.key !== "Enter") return;
 
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return;
-  if (!sel.isCollapsed) return; // 選択範囲ありは通常挙動
+  if (!sel.isCollapsed) return;
 
   const range = sel.getRangeAt(0);
   const node = range.startContainer;
@@ -715,24 +719,20 @@ editor.addEventListener("keydown", (e)=>{
     ? (node.nodeType === 1 ? node : node.parentElement).closest?.(".cbline")
     : null;
 
-  if (!line) return; // cbline外は通常の改行に任せる
+  if (!line) return;
 
-  // cbline内のEnterはブラウザに任せない
   e.preventDefault();
 
-  // 次の行（空行）を cbline の直後に作る
   const newLine = document.createElement("div");
   newLine.innerHTML = "<br>";
   line.after(newLine);
 
-  // カーソルを空行へ
   const r2 = document.createRange();
   r2.setStart(newLine, 0);
   r2.collapse(true);
   sel.removeAllRanges();
   sel.addRange(r2);
 
-  // draft反映
   draftHtml = editor.innerHTML;
   viewer.innerHTML = draftHtml;
   normalizeCbLines(viewer);
@@ -774,9 +774,7 @@ btnRed.addEventListener("click", ()=>{
   applyColor("#d23b3b");
 });
 
-/* --- 行取得（強化版）
-   editor直下のテキストノードでも “行” として拾えるようにする
-*/
+/* --- 行取得（強化版） */
 function getCurrentBlockInEditor(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -785,11 +783,9 @@ function getCurrentBlockInEditor(){
   let node = range.startContainer;
   if (!node) return null;
 
-  // text node -> element
   if (node.nodeType === 3){
     const parent = node.parentNode;
     if (parent === editor){
-      // editor直下のテキストなら、行としてdivに包んで返す
       const wrap = document.createElement("div");
       editor.insertBefore(wrap, node);
       wrap.appendChild(node);
@@ -798,14 +794,11 @@ function getCurrentBlockInEditor(){
     node = parent;
   }
 
-  // 近いブロックへ上がる
   while (node && node !== editor){
     const tag = (node.tagName||"").toUpperCase();
     if (tag === "DIV" || tag === "P" || tag === "LI") return node;
     node = node.parentNode;
   }
-
-  // それでもダメなら editor 自体は行扱いしない
   return null;
 }
 
@@ -848,7 +841,6 @@ btnCb.addEventListener("click", ()=>{
   const selectedText = sel.toString().trim();
 
   if (selectedText){
-    // 選択あり：選択範囲をチェック行へ
     const line = makeLine(selectedText);
     range.deleteContents();
     range.insertNode(line);
@@ -862,7 +854,6 @@ btnCb.addEventListener("click", ()=>{
     r2.collapse(true);
     sel.addRange(r2);
   }else{
-    // 選択なし：カーソル行をチェック化（強化版）
     const block = getCurrentBlockInEditor();
     if (!block){
       toast("行にカーソルを置いて押してね");
@@ -900,7 +891,6 @@ function saveCurrent(){
   note.bodyHtml = draftHtml;
   note.updatedAt = nowTs();
 
-  // ★固定じゃないなら、保存(更新)したメモを更新順セクションの先頭へ上げる
   if (!isPinned(note.id)){
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
     store.normalOrderIds.unshift(note.id);
@@ -938,14 +928,8 @@ btnDeleteInEdit.addEventListener("click", ()=>{
   toast("削除しました");
   showList();
 });
-/* =========================
-   Part4: export/import + drag + boot + hardware back
-   ========================= */
 
-/* Export / Import
-   - .json: 置き換えインポート
-   - .txt : 1つのメモとして取り込み（追記）
-*/
+/* Export / Import (.json置換 / .txt追記) */
 btnExport.addEventListener("click", ()=>{
   if (!screenEdit.classList.contains("hidden") && dirty){
     const ok = confirm("編集中の未保存内容があります。\n保存せずにExportすると未保存分は入りません。\n続けますか？");
@@ -987,7 +971,6 @@ fileImport.addEventListener("change", async ()=>{
       const n = { id: uid(), title: f.name.replace(/\.txt$/i,""), bodyHtml: body, createdAt: nowTs(), updatedAt: nowTs() };
       store.notes.unshift(n);
 
-      // 取り込みは更新順セクション先頭へ
       store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
       store.normalOrderIds.unshift(n.id);
 
@@ -1010,10 +993,7 @@ fileImport.addEventListener("change", async ()=>{
   }
 });
 
-/* --- Drag
-   - ★固定セクション：pinnedIds を並び替え
-   - 更新順セクション：normalOrderIds を並び替え
-*/
+/* Drag: pinnedIds / normalOrderIds */
 let dragState = null;
 
 function attachManualDrag(handleEl, rowEl, note){
@@ -1021,7 +1001,7 @@ function attachManualDrag(handleEl, rowEl, note){
   let timer = null;
 
   const start = (e)=>{
-    if ((elSearch.value||"").trim()) return; // 検索中は無効
+    if ((elSearch.value||"").trim()) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -1059,7 +1039,7 @@ function beginDrag(rowEl, note){
   rowEl.after(ghost);
   rowEl.classList.add("dragging");
 
-  dragState = { rowEl, note, ghost, pinned };
+  dragState = { rowEl, ghost, pinned };
   toast("ドラッグで並び替え");
 }
 
@@ -1100,18 +1080,13 @@ function onDragEnd(){
   document.removeEventListener("pointerup", onDragEnd);
 
   dragState.rowEl.classList.remove("dragging");
-
-  // ゴースト位置に本体を移動
   dragState.ghost.replaceWith(dragState.rowEl);
 
-  const ids = Array.from(notesEl.querySelectorAll(".rowCompact"))
-    .map(el=>el.dataset.id);
+  const ids = Array.from(notesEl.querySelectorAll(".rowCompact")).map(el=>el.dataset.id);
 
   if (dragState.pinned){
-    // pinnedセクションの順に再構築
     store.pinnedIds = ids.filter(id=>isPinned(id));
   }else{
-    // normalセクションの順に再構築（pinnedを除外）
     store.normalOrderIds = ids.filter(id=>!isPinned(id));
   }
 
@@ -1148,13 +1123,50 @@ function boot(){
 }
 boot();
 
-// ===== Service Worker 登録（1回だけ）=====
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(()=>{});
-    });
-  }
+/* =========================
+   PWA: Service Worker 登録 & 更新通知
+   ========================= */
+(function registerSW(){
+  if (!("serviceWorker" in navigator)) return;
 
+  let reloading = false;
+
+  window.addEventListener("load", async ()=>{
+    try{
+      const reg = await navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(APP_VERSION)}`);
+
+      // すでに更新SWが待機してる場合
+      if (reg.waiting){
+        toast("更新あり。再起動で反映");
+      }
+
+      // update found
+      reg.addEventListener("updatefound", ()=>{
+        const newWorker = reg.installing;
+        if (!newWorker) return;
+        newWorker.addEventListener("statechange", ()=>{
+          if (newWorker.state === "installed"){
+            if (navigator.serviceWorker.controller){
+              toast("更新あり。再起動で反映");
+            }
+          }
+        });
+      });
+
+      // コントローラーが切り替わったら1回だけリロード
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+        if (reloading) return;
+        reloading = true;
+        location.reload();
+      });
+
+      // 起動時に更新チェック
+      reg.update().catch(()=>{});
+    }catch(_){
+      // 失敗してもアプリ自体は動かす
+    }
+  });
+})();
 </script>
 </body>
 </html>

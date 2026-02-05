@@ -68,14 +68,6 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
 .hidden{display:none!important}
 
-/* selection checkbox on list */
-.selBox{
-  width:22px;height:22px;border:1px solid #bbb;border-radius:6px;
-  display:grid;place-items:center;font-weight:900;flex:0 0 22px;
-  user-select:none;-webkit-user-select:none;
-}
-.rowCompact.selected{border-color:#cfcfcf; background:#fafafa}
-
 /* editor */
 .input{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);font-size:16px;font-weight:900}
 .viewer,.editor{
@@ -103,7 +95,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 .tool.active{border-color:var(--accent)}
 .hint{margin-left:auto}
 
-/* checkbox */
+/* checkbox in memo */
 .cbline{display:flex;gap:10px;margin:6px 0;align-items:flex-start}
 .cbox{
   width:24px;height:24px;border:1px solid #bbb;border-radius:6px;
@@ -112,6 +104,14 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 }
 .cbtext{flex:1;word-break:break-word}
 .cbline.done .cbtext{color:#777;text-decoration:line-through}
+
+/* selection mode */
+.selBox{
+  width:22px;height:22px;border:1px solid #bbb;border-radius:6px;
+  display:grid;place-items:center;font-weight:900;flex:0 0 22px;
+  user-select:none;-webkit-user-select:none;
+}
+.selBox.on{border-color:#111}
 
 /* toast */
 .toast{
@@ -130,28 +130,26 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 }
 
 /* modal */
-.overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;
-  display:flex;align-items:flex-end;justify-content:center;padding:12px;
+.modalBackdrop{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;
+  display:none;align-items:center;justify-content:center;padding:16px;
 }
-.sheet{
-  width:min(980px,100%); background:#fff; border-radius:18px;
-  border:1px solid var(--line); box-shadow:var(--shadow);
-  padding:12px;
+.modalBackdrop.show{display:flex}
+.modal{
+  width:min(680px, 100%);
+  background:#fff;border:1px solid var(--line);border-radius:16px;
+  box-shadow:var(--shadow);padding:14px;
 }
-.sheet h3{margin:4px 0 10px;font-size:16px;font-weight:900}
-.sheet .sheetRow{display:flex;gap:8px;flex-wrap:wrap}
-.sheet .sheetRow .btn{flex:1}
-.sheet .notePick{
-  margin-top:10px; max-height:52vh; overflow:auto; border-top:1px solid var(--line); padding-top:10px;
+.modalTitle{font-weight:900;font-size:16px;margin:2px 0 10px}
+.modalBody{max-height:min(70vh, 520px);overflow:auto;border-top:1px solid var(--line);padding-top:10px}
+.modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+.notePickRow{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 10px;border:1px solid var(--line);
+  border-radius:14px;background:#fff;margin-bottom:8px;
 }
-.notePickItem{
-  display:flex;gap:10px;align-items:center;
-  padding:10px 8px;border:1px solid var(--line);border-radius:14px;
-  margin-bottom:8px;
-}
-.notePickItem .t{font-weight:900;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-.notePickItem .m{font-size:12px;color:var(--muted);font-weight:800}
+.notePickTitle{font-weight:900;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notePickMeta{color:var(--muted);font-size:12px;font-weight:800}
 </style>
 </head>
 
@@ -160,11 +158,9 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   <div class="brand">
     <h1>offline-memo-final</h1>
     <div class="row">
-      <button id="btnSelectMode" class="btn ghost" type="button">選択</button>
-      <button id="btnDeleteSelected" class="btn danger hidden" type="button">選択削除</button>
-
       <button id="btnExport" class="btn ghost" type="button">Export</button>
       <button id="btnImport" class="btn ghost" type="button">Import</button>
+      <button id="btnSelect" class="btn ghost" type="button">選択</button>
       <button id="btnNew" class="btn" type="button">新規</button>
     </div>
   </div>
@@ -184,8 +180,17 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
     <input id="elSearch" class="search" placeholder="検索（タイトル・本文）">
 
-    <div class="muted" style="margin-top:10px">
+    <div id="selectHint" class="muted" style="margin-top:10px">
       基本：更新順 / ★固定内も更新順内も ≡長押しで並び替え
+    </div>
+
+    <div id="selectBar" class="row hidden" style="margin-top:10px;flex-wrap:wrap">
+      <div class="pill" id="selCountPill">0件選択</div>
+      <div class="spacer"></div>
+      <button id="btnSelAll" class="btn ghost" type="button">全選択</button>
+      <button id="btnSelClear" class="btn ghost" type="button">解除</button>
+      <button id="btnSelDelete" class="btn danger" type="button">選択削除</button>
+      <button id="btnSelCancel" class="btn" type="button">完了</button>
     </div>
 
     <div id="notesEl" class="list"></div>
@@ -224,52 +229,28 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   </div>
 </div>
 
-<!-- Modals -->
-<div id="overlayExport" class="overlay hidden" role="dialog" aria-modal="true">
-  <div class="sheet">
-    <h3>Export</h3>
-    <div class="sheetRow">
-      <button id="btnExportBackup" class="btn primary" type="button">バックアップ（JSON）</button>
-      <button id="btnExportText" class="btn" type="button">テキスト化（.txt）</button>
-      <button id="btnExportClose" class="btn ghost" type="button">閉じる</button>
-    </div>
-    <div class="muted" style="margin-top:10px">
-      ※ 編集中の未保存は、保存しないとExportに入りません
-    </div>
-  </div>
-</div>
-
-<div id="overlayTxt" class="overlay hidden" role="dialog" aria-modal="true">
-  <div class="sheet">
-    <h3>テキスト化するメモを選択</h3>
-    <div class="sheetRow">
-      <button id="btnTxtSelectAll" class="btn" type="button">全選択</button>
-      <button id="btnTxtClear" class="btn ghost" type="button">解除</button>
-      <button id="btnTxtExportGo" class="btn primary" type="button">選択分を .txt で書き出す</button>
-      <button id="btnTxtClose" class="btn ghost" type="button">閉じる</button>
-    </div>
-    <div class="muted" style="margin-top:10px">
-      ※ 選んだメモは「個別ファイル」でダウンロードされます（複数だと複数回）
-    </div>
-    <div id="txtPickList" class="notePick"></div>
-  </div>
-</div>
-
 <input id="fileImport" type="file" class="hidden" accept=".json,.txt,application/json,text/plain" multiple>
 <div id="toast" class="toast">OK</div>
 
+<!-- modal -->
+<div id="modalBackdrop" class="modalBackdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div id="modalTitle" class="modalTitle">タイトル</div>
+    <div id="modalBody" class="modalBody"></div>
+    <div id="modalActions" class="modalActions"></div>
+  </div>
+</div>
+
 <script>
 /* =========================
-   offline-memo-final v7 (整理版)
-   - ★固定: pinnedIds（手動並び替え）
-   - 更新順: normalOrderIds（手動並び替え）
-   - 保存(更新)で通常メモは normalOrderIds 先頭へ
-   - Export: JSON / 選択txt
-   - List: 選択モードで複数削除
+   offline-memo-final v7 + PWA cache v8
+   追加:
+   - 選択モード(複数削除)
+   - Export: バックアップ(json) / テキスト化(txt, 複数選択→個別txt)
+   - Import: txt 複数→それぞれメモ化 / json は置換
    ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
-
 /* utils */
 function nowTs(){ return Date.now(); }
 function pad2(n){ return String(n).padStart(2,"0"); }
@@ -295,41 +276,34 @@ function stripTags(html){
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
-function downloadText(filename, text){
-  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url), 1000);
-}
 
-/* html -> text (checkbox line keep) */
-function htmlToPlainText(html){
+/* html -> text (txt export) */
+function htmlToText(html){
   const root = document.createElement("div");
   root.innerHTML = html || "";
 
-  // <br> を \n に
-  root.querySelectorAll("br").forEach(br=>{
-    br.replaceWith(document.createTextNode("\n"));
-  });
-
-  // checkbox lines
+  // checkbox line -> "[ ] text" / "[x] text"
   root.querySelectorAll(".cbline").forEach(line=>{
-    const done = line.getAttribute("data-done") === "true" || line.classList.contains("done");
+    const done = line.getAttribute("data-done") === "true";
     const text = (line.querySelector(".cbtext")?.textContent || line.textContent || "").trim();
-    const out = (done ? "[x] " : "[ ] ") + text + "\n";
-    line.replaceWith(document.createTextNode(out));
+    const rep = document.createTextNode(`${done ? "[x]" : "[ ]"} ${text}\n`);
+    line.replaceWith(rep);
   });
 
-  // 連続改行・末尾整形
-  let t = (root.textContent || "");
-  t = t.replace(/\r/g,"");
-  t = t.replace(/\n{3,}/g, "\n\n");
-  return t.trim() + "\n";
+  // <br> -> \n
+  root.querySelectorAll("br").forEach(br=> br.replaceWith(document.createTextNode("\n")));
+
+  // block end -> \n
+  const blocks = root.querySelectorAll("div,p,li");
+  blocks.forEach(b=>{
+    if (b.childNodes.length === 0) return;
+    b.appendChild(document.createTextNode("\n"));
+  });
+
+  let t = root.textContent || "";
+  // normalize
+  t = t.replace(/\n{3,}/g, "\n\n").replace(/[ \t]+\n/g, "\n").trim();
+  return t;
 }
 
 /* toast */
@@ -342,6 +316,32 @@ function toast(msg){
   toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1200);
 }
 
+/* modal */
+const modalBackdrop = document.getElementById("modalBackdrop");
+const modalTitle = document.getElementById("modalTitle");
+const modalBody = document.getElementById("modalBody");
+const modalActions = document.getElementById("modalActions");
+
+function closeModal(){
+  modalBackdrop.classList.remove("show");
+  modalBackdrop.setAttribute("aria-hidden","true");
+  modalTitle.textContent = "";
+  modalBody.innerHTML = "";
+  modalActions.innerHTML = "";
+}
+function openModal({title, bodyEl, actions}){
+  modalTitle.textContent = title || "";
+  modalBody.innerHTML = "";
+  if (bodyEl) modalBody.appendChild(bodyEl);
+  modalActions.innerHTML = "";
+  (actions||[]).forEach(btn=> modalActions.appendChild(btn));
+  modalBackdrop.classList.add("show");
+  modalBackdrop.setAttribute("aria-hidden","false");
+}
+modalBackdrop.addEventListener("click",(e)=>{
+  if (e.target === modalBackdrop) closeModal();
+});
+
 /* DOM refs */
 const screenList = document.getElementById("screenList");
 const screenEdit = document.getElementById("screenEdit");
@@ -350,14 +350,20 @@ const bottomBar = document.getElementById("bottomBar");
 const btnNew = document.getElementById("btnNew");
 const btnExport = document.getElementById("btnExport");
 const btnImport = document.getElementById("btnImport");
+const btnSelect = document.getElementById("btnSelect");
 const fileImport = document.getElementById("fileImport");
-
-const btnSelectMode = document.getElementById("btnSelectMode");
-const btnDeleteSelected = document.getElementById("btnDeleteSelected");
 
 const countPill = document.getElementById("countPill");
 const elSearch = document.getElementById("elSearch");
 const notesEl = document.getElementById("notesEl");
+
+const selectHint = document.getElementById("selectHint");
+const selectBar = document.getElementById("selectBar");
+const selCountPill = document.getElementById("selCountPill");
+const btnSelAll = document.getElementById("btnSelAll");
+const btnSelClear = document.getElementById("btnSelClear");
+const btnSelDelete = document.getElementById("btnSelDelete");
+const btnSelCancel = document.getElementById("btnSelCancel");
 
 const btnBack = document.getElementById("btnBack");
 const btnSave = document.getElementById("btnSave");
@@ -372,19 +378,6 @@ const saveState = document.getElementById("saveState");
 const btnBlack = document.getElementById("btnBlack");
 const btnRed = document.getElementById("btnRed");
 const btnCb = document.getElementById("btnCb");
-
-/* modals */
-const overlayExport = document.getElementById("overlayExport");
-const btnExportBackup = document.getElementById("btnExportBackup");
-const btnExportText = document.getElementById("btnExportText");
-const btnExportClose = document.getElementById("btnExportClose");
-
-const overlayTxt = document.getElementById("overlayTxt");
-const txtPickList = document.getElementById("txtPickList");
-const btnTxtSelectAll = document.getElementById("btnTxtSelectAll");
-const btnTxtClear = document.getElementById("btnTxtClear");
-const btnTxtExportGo = document.getElementById("btnTxtExportGo");
-const btnTxtClose = document.getElementById("btnTxtClose");
 
 /* store */
 function normalizeStore(s){
@@ -439,12 +432,10 @@ function isPinned(id){ return store.pinnedIds.includes(id); }
 
 function pinToggle(id){
   if (isPinned(id)){
-    // unpin -> normalへ（先頭）
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
     store.normalOrderIds.unshift(id);
   }else{
-    // pin -> pinnedへ（先頭）
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
     store.pinnedIds.unshift(id);
@@ -459,14 +450,23 @@ let dirty=false;
 let savedTitle="", savedHtml="";
 let draftTitle="", draftHtml="";
 
-/* list selection mode */
-let selectMode = false;
+/* selection mode */
+let selectionMode = false;
 let selectedIds = new Set();
 
-function updateSelectUI(){
-  btnSelectMode.textContent = selectMode ? "完了" : "選択";
-  btnDeleteSelected.classList.toggle("hidden", !selectMode);
-  btnDeleteSelected.disabled = selectedIds.size === 0;
+function setSelectionMode(on){
+  selectionMode = !!on;
+  selectedIds = new Set();
+  btnSelect.textContent = selectionMode ? "選択中" : "選択";
+  btnSelect.classList.toggle("primary", selectionMode);
+  selectBar.classList.toggle("hidden", !selectionMode);
+  selectHint.classList.toggle("hidden", selectionMode);
+  updateSelectionUI();
+  renderList();
+}
+function updateSelectionUI(){
+  selCountPill.textContent = `${selectedIds.size}件選択`;
+  btnSelDelete.disabled = selectedIds.size === 0;
 }
 
 /* dirty + screens */
@@ -503,7 +503,6 @@ function setMode(edit){
     normalizeCbLines(viewer);
   }
 }
-
 function addHeading(text){
   const lab = document.createElement("div");
   lab.className = "sectionLabel";
@@ -523,7 +522,7 @@ function buildList(){
   normalIds = normalIds.filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
   let normal = normalIds.map(id=>byId.get(id)).filter(Boolean);
 
-  // 検索時：表示上は更新順寄せ（ドラッグ無効）
+  // 検索時：表示上だけ更新順（ドラッグ＆選択は一応可、でも混乱するので選択は許可しつつドラッグ無効）
   if (q){
     const filtered = notes.filter(n=>{
       const t = (n.title||"").toLowerCase();
@@ -548,13 +547,11 @@ function renderRow(note, searching){
   row.dataset.id = note.id;
 
   // selection checkbox
-  let selEl = null;
-  if (selectMode){
-    selEl = document.createElement("div");
-    selEl.className = "selBox";
-    const on = selectedIds.has(note.id);
-    selEl.textContent = on ? "✓" : "";
-    row.classList.toggle("selected", on);
+  let sel = null;
+  if (selectionMode){
+    sel = document.createElement("div");
+    sel.className = "selBox" + (selectedIds.has(note.id) ? " on" : "");
+    sel.textContent = selectedIds.has(note.id) ? "✓" : "";
   }
 
   const left = document.createElement("div");
@@ -592,16 +589,15 @@ function renderRow(note, searching){
 
   actions.append(dragBtn, starBtn, delBtn);
 
-  if (selEl) row.append(selEl, left, actions);
+  if (selectionMode) row.append(sel, left, actions);
   else row.append(left, actions);
 
   row.addEventListener("click", ()=>{
-    if (selectMode){
-      // toggle select
+    if (selectionMode){
       if (selectedIds.has(note.id)) selectedIds.delete(note.id);
       else selectedIds.add(note.id);
-      updateSelectUI();
-      renderList();
+      updateSelectionUI();
+      renderList(); // sel描画更新
       return;
     }
     openNote(note.id);
@@ -609,6 +605,7 @@ function renderRow(note, searching){
 
   starBtn.addEventListener("click", (e)=>{
     e.stopPropagation();
+    if (selectionMode) return;
     pinToggle(note.id);
     saveStore();
     renderList();
@@ -617,31 +614,25 @@ function renderRow(note, searching){
 
   delBtn.addEventListener("click", (e)=>{
     e.stopPropagation();
+    if (selectionMode) return;
     if (!confirm("削除しますか？")) return;
-    removeNotesByIds([note.id]);
+    store.notes = store.notes.filter(n=>n.id!==note.id);
+    store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
+    ensureAtLeastOne();
+    saveStore();
+    renderList();
     toast("削除しました");
   });
 
-  // ドラッグ（検索中 or 選択モード中は無効）
-  if (!searching && !selectMode){
+  // ドラッグ（検索中 or 選択中は無効）
+  if (!searching && !selectionMode){
     attachManualDrag(dragBtn, row, note);
   }else{
     dragBtn.style.opacity = "0.35";
   }
 
   return row;
-}
-
-function removeNotesByIds(ids){
-  const set = new Set(ids);
-  store.notes = store.notes.filter(n=>!set.has(n.id));
-  store.pinnedIds = store.pinnedIds.filter(x=>!set.has(x));
-  store.normalOrderIds = store.normalOrderIds.filter(x=>!set.has(x));
-  ensureAtLeastOne();
-  saveStore();
-  selectedIds = new Set([...selectedIds].filter(id=>!set.has(id)));
-  renderList();
-  updateSelectUI();
 }
 
 /* render */
@@ -695,7 +686,7 @@ function openNote(id){
   history.pushState({screen:"edit", id: currentId}, "");
 }
 
-/* events: search/new/selectmode */
+/* events */
 elSearch.addEventListener("input", ()=> renderList());
 
 btnNew.addEventListener("click", ()=>{
@@ -721,22 +712,40 @@ btnNew.addEventListener("click", ()=>{
   resetUndoRedo();
 });
 
-btnSelectMode.addEventListener("click", ()=>{
-  selectMode = !selectMode;
-  if (!selectMode) selectedIds.clear();
-  updateSelectUI();
+/* selection UI */
+btnSelect.addEventListener("click", ()=>{
+  setSelectionMode(!selectionMode);
+});
+btnSelCancel.addEventListener("click", ()=> setSelectionMode(false));
+btnSelClear.addEventListener("click", ()=>{
+  selectedIds = new Set();
+  updateSelectionUI();
   renderList();
 });
-btnDeleteSelected.addEventListener("click", ()=>{
+btnSelAll.addEventListener("click", ()=>{
+  const { pinned, normal } = buildList();
+  const all = [...pinned, ...normal].map(n=>n.id);
+  selectedIds = new Set(all);
+  updateSelectionUI();
+  renderList();
+});
+btnSelDelete.addEventListener("click", ()=>{
   if (selectedIds.size === 0) return;
   if (!confirm(`選択した ${selectedIds.size} 件を削除しますか？`)) return;
-  removeNotesByIds([...selectedIds]);
+
+  const delSet = new Set(selectedIds);
+  store.notes = store.notes.filter(n=>!delSet.has(n.id));
+  store.pinnedIds = store.pinnedIds.filter(id=>!delSet.has(id));
+  store.normalOrderIds = store.normalOrderIds.filter(id=>!delSet.has(id));
+
+  ensureAtLeastOne();
+  saveStore();
   toast("削除しました");
+  setSelectionMode(false);
 });
-updateSelectUI();
 
 /* =========================
-   checkbox + color + undo/redo + save/back
+   Part: checkbox + color + undo/redo + save/back
    ========================= */
 
 /* checkbox helpers */
@@ -837,7 +846,6 @@ btnRedo.addEventListener("click", ()=>{
   updateDirtyFlag();
   refreshUndoButtons();
 });
-
 /* viewer/editor behavior */
 viewer.addEventListener("click", (e)=>{
   const box = e.target.closest && e.target.closest(".cbox");
@@ -967,6 +975,7 @@ function getCurrentBlockInEditor(){
   return null;
 }
 
+/* checkboxify */
 btnCb.addEventListener("click", ()=>{
   if (!isEditing) setMode(true);
   editor.focus();
@@ -1085,36 +1094,22 @@ btnDeleteInEdit.addEventListener("click", ()=>{
   const name = (note.title||"").trim() ? note.title : "（無題）";
   if (!confirm(`「${name}」を削除しますか？\nよろしいですか？`)) return;
 
-  removeNotesByIds([note.id]);
+  store.notes = store.notes.filter(n=>n.id!==note.id);
+  store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
+  store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
+  ensureAtLeastOne();
+  saveStore();
   toast("削除しました");
   showList();
 });
 
 /* =========================
    Export / Import
-   - Export: JSON or selected txt
-   - Import: .json replace / .txt create note(s) (multiple ok)
+   - Export: モード選択 -> JSON / TXT(複数)
+   - Import: TXT 複数 -> それぞれメモ / JSON 置換
    ========================= */
 
-function openOverlay(el){
-  el.classList.remove("hidden");
-}
-function closeOverlay(el){
-  el.classList.add("hidden");
-}
-overlayExport.addEventListener("click", (e)=>{
-  if (e.target === overlayExport) closeOverlay(overlayExport);
-});
-overlayTxt.addEventListener("click", (e)=>{
-  if (e.target === overlayTxt) closeOverlay(overlayTxt);
-});
-
-btnExport.addEventListener("click", ()=>{
-  openOverlay(overlayExport);
-});
-btnExportClose.addEventListener("click", ()=> closeOverlay(overlayExport));
-
-function exportBackupJson(){
+function exportJson(){
   if (!screenEdit.classList.contains("hidden") && dirty){
     const ok = confirm("編集中の未保存内容があります。\n保存せずにExportすると未保存分は入りません。\n続けますか？");
     if (!ok) return;
@@ -1136,110 +1131,129 @@ function exportBackupJson(){
   toast("書き出しました");
 }
 
-btnExportBackup.addEventListener("click", ()=>{
-  closeOverlay(overlayExport);
-  exportBackupJson();
-});
+function exportTxtPick(){
+  const { pinned, normal } = buildList();
+  const list = [...pinned, ...normal];
 
-let txtSelected = new Set();
+  const wrap = document.createElement("div");
 
-function renderTxtPicker(){
-  txtPickList.innerHTML = "";
-
-  const notes = store.notes.slice();
-  // 表示は「固定→更新順」の見た目に寄せる
-  const byId = new Map(notes.map(n=>[n.id,n]));
-  const pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
-  const normal = store.normalOrderIds.map(id=>byId.get(id)).filter(Boolean);
-
-  const addItem = (n)=>{
-    const item = document.createElement("div");
-    item.className = "notePickItem";
+  const picks = new Set();
+  list.forEach(n=>{
+    const row = document.createElement("div");
+    row.className = "notePickRow";
 
     const box = document.createElement("div");
     box.className = "selBox";
-    box.textContent = txtSelected.has(n.id) ? "✓" : "";
+    box.textContent = "";
+    const title = document.createElement("div");
+    title.className = "notePickTitle";
+    title.textContent = (n.title||"").trim() ? n.title : "（無題）";
+    const meta = document.createElement("div");
+    meta.className = "notePickMeta";
+    meta.textContent = fmt(n.updatedAt);
 
-    const t = document.createElement("div");
-    t.className = "t";
-    t.textContent = (n.title||"").trim() ? n.title : "（無題）";
+    row.append(box, title, meta);
 
-    const m = document.createElement("div");
-    m.className = "m";
-    m.textContent = fmt(n.updatedAt);
-
-    const right = document.createElement("div");
-    right.style.display="flex";
-    right.style.flexDirection="column";
-    right.style.gap="2px";
-    right.append(t,m);
-
-    item.append(box, right);
-
-    item.addEventListener("click", ()=>{
-      if (txtSelected.has(n.id)) txtSelected.delete(n.id);
-      else txtSelected.add(n.id);
-      renderTxtPicker();
+    row.addEventListener("click", ()=>{
+      if (picks.has(n.id)){
+        picks.delete(n.id);
+        box.classList.remove("on");
+        box.textContent = "";
+      }else{
+        picks.add(n.id);
+        box.classList.add("on");
+        box.textContent = "✓";
+      }
     });
 
-    txtPickList.appendChild(item);
-  };
-
-  if (pinned.length){
-    const lab = document.createElement("div");
-    lab.className="muted";
-    lab.style.margin="0 0 6px 2px";
-    lab.textContent="★ 固定";
-    txtPickList.appendChild(lab);
-    pinned.forEach(addItem);
-  }
-
-  const lab2 = document.createElement("div");
-  lab2.className="muted";
-  lab2.style.margin="10px 0 6px 2px";
-  lab2.textContent="更新順";
-  txtPickList.appendChild(lab2);
-  normal.forEach(addItem);
-
-  btnTxtExportGo.disabled = txtSelected.size===0;
-}
-
-btnExportText.addEventListener("click", ()=>{
-  closeOverlay(overlayExport);
-  txtSelected = new Set();
-  renderTxtPicker();
-  openOverlay(overlayTxt);
-});
-btnTxtClose.addEventListener("click", ()=> closeOverlay(overlayTxt));
-
-btnTxtSelectAll.addEventListener("click", ()=>{
-  txtSelected = new Set(store.notes.map(n=>n.id));
-  renderTxtPicker();
-});
-btnTxtClear.addEventListener("click", ()=>{
-  txtSelected.clear();
-  renderTxtPicker();
-});
-btnTxtExportGo.addEventListener("click", ()=>{
-  if (txtSelected.size===0) return;
-
-  // 連続DLになるので最初に一言
-  toast("ダウンロード開始");
-
-  const ids = [...txtSelected];
-  ids.forEach((id, idx)=>{
-    const n = getNote(id);
-    if (!n) return;
-    const title = (n.title||"").trim() ? n.title.trim() : "無題";
-    const safe = title.replace(/[\\\/:*?"<>|]/g, "_").slice(0, 80);
-    const filename = `memo-${safe}-${stampForFile()}-${idx+1}.txt`;
-
-    const header = `${title}\n更新: ${fmt(n.updatedAt)}\n\n`;
-    const body = htmlToPlainText(n.bodyHtml||"");
-    downloadText(filename, header + body);
+    wrap.appendChild(row);
   });
 
-  closeOverlay(overlayTxt);
+  const btnCancel = document.createElement("button");
+  btnCancel.className = "btn ghost";
+  btnCancel.type = "button";
+  btnCancel.textContent = "キャンセル";
+  btnCancel.addEventListener("click", closeModal);
+
+  const btnAll = document.createElement("button");
+  btnAll.className = "btn ghost";
+  btnAll.type = "button";
+  btnAll.textContent = "全選択";
+  btnAll.addEventListener("click", ()=>{
+    picks.clear();
+    list.forEach(n=>picks.add(n.id));
+    wrap.querySelectorAll(".notePickRow").forEach(r=>{
+      const b = r.querySelector(".selBox");
+      b.classList.add("on"); b.textContent="✓";
+    });
+  });
+
+  const btnOk = document.createElement("button");
+  btnOk.className = "btn primary";
+  btnOk.type = "button";
+  btnOk.textContent = "TXTを書き出す";
+  btnOk.addEventListener("click", ()=>{
+    if (picks.size === 0){ toast("メモを選んでね"); return; }
+
+    const pickedNotes = list.filter(n=>picks.has(n.id));
+    pickedNotes.forEach(n=>{
+      const title = (n.title||"").trim() ? n.title.trim() : "memo";
+      const safe = title.replace(/[\\\/:*?"<>|]/g,"_").slice(0,60);
+      const body = htmlToText(n.bodyHtml || "");
+      const txt = `${title}\n\n${body}\n`;
+      const blob = new Blob([txt], {type:"text/plain"});
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safe}-${stampForFile()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setTimeout(()=> URL.revokeObjectURL(url), 800);
+    });
+
+    closeModal();
+    toast("TXTを書き出しました");
+  });
+
+  openModal({
+    title: "テキスト化するメモを選択",
+    bodyEl: wrap,
+    actions: [btnCancel, btnAll, btnOk]
+  });
+}
+
+btnExport.addEventListener("click", ()=>{
+  const body = document.createElement("div");
+  body.innerHTML = `
+    <div class="muted" style="margin-bottom:10px">Export方法を選んでね</div>
+    <div class="row" style="flex-wrap:wrap">
+      <div class="pill">バックアップ：全データをJSON</div>
+      <div class="pill">テキスト化：選んだメモを個別TXT</div>
+    </div>
+  `;
+
+  const b1 = document.createElement("button");
+  b1.className = "btn primary";
+  b1.type = "button";
+  b1.textContent = "バックアップ(JSON)";
+  b1.addEventListener("click", ()=>{ closeModal(); exportJson(); });
+
+  const b2 = document.createElement("button");
+  b2.className = "btn";
+  b2.type = "button";
+  b2.textContent = "テキスト化(TXT)";
+  b2.addEventListener("click", ()=>{ closeModal(); exportTxtPick(); });
+
+  const b3 = document.createElement("button");
+  b3.className = "btn ghost";
+  b3.type = "button";
+  b3.textContent = "キャンセル";
+  b3.addEventListener("click", closeModal);
+
+  openModal({ title:"Export", bodyEl: body, actions:[b3, b2, b1] });
 });
 
 btnImport.addEventListener("click", ()=>{
@@ -1248,19 +1262,20 @@ btnImport.addEventListener("click", ()=>{
 });
 
 fileImport.addEventListener("change", async ()=>{
-  const files = fileImport.files ? Array.from(fileImport.files) : [];
+  const files = Array.from(fileImport.files || []);
   if (!files.length) return;
 
-  // JSONが混ざってるなら「JSON置換」を優先（1個目のjsonのみ）
-  const jsonFile = files.find(f => (f.name||"").toLowerCase().endsWith(".json"));
-  const txtFiles = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
+  const jsonFiles = files.filter(f => (f.name||"").toLowerCase().endsWith(".json"));
+  const txtFiles  = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
 
-  try{
-    if (jsonFile){
-      const ok = confirm("JSONをインポートすると現在のメモを全て置き換えます。\nよろしいですか？");
+  // JSONが入ってたら置換優先（混在は危険なので確認）
+  if (jsonFiles.length){
+    if (files.length > 1){
+      const ok = confirm("JSONインポートは「全置換」です。\nTXTなど他のファイルも選ばれていますが、JSONのみ処理して置き換えます。\n続けますか？");
       if (!ok) return;
-
-      const text = await jsonFile.text();
+    }
+    try{
+      const text = await jsonFiles[0].text();
       const obj = safeParse(text, null);
       if (!obj || !obj.data) throw new Error("invalid");
       store = normalizeStore(obj.data);
@@ -1268,42 +1283,40 @@ fileImport.addEventListener("change", async ()=>{
       saveStore();
       toast("インポートしました");
       showList();
-      return;
+    }catch(_){
+      alert("インポート失敗：JSONが不正です");
     }
-
-    if (txtFiles.length){
-      // 複数txt -> それぞれ1メモ追加
-      for (const f of txtFiles){
-        const text = await f.text();
-        const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
-        const n = {
-          id: uid(),
-          title: (f.name||"").replace(/\.txt$/i,""),
-          bodyHtml: body,
-          createdAt: nowTs(),
-          updatedAt: nowTs()
-        };
-        store.notes.unshift(n);
-        store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
-        store.normalOrderIds.unshift(n.id);
-      }
-      saveStore();
-      renderList();
-      toast(`${txtFiles.length}件 取り込みました`);
-      return;
-    }
-
-    alert("インポート失敗：.json か .txt を選んでね");
-  }catch(e){
-    alert("インポート失敗：ファイル形式が違うか壊れてます");
+    return;
   }
+
+  // TXT複数：それぞれメモ化（追加）
+  if (txtFiles.length){
+    // 先にreverseして「最初に選んだ方が上」に寄せる（端末によって順序は揺れるけど一応）
+    const list = txtFiles.slice().reverse();
+    for (const f of list){
+      const text = await f.text();
+      const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
+      const n = {
+        id: uid(),
+        title: (f.name||"").replace(/\.txt$/i,""),
+        bodyHtml: body,
+        createdAt: nowTs(),
+        updatedAt: nowTs()
+      };
+      store.notes.unshift(n);
+      store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+      store.normalOrderIds.unshift(n.id);
+    }
+    saveStore();
+    renderList();
+    toast(".txt を取り込みました");
+    return;
+  }
+
+  alert("インポート失敗：.json または .txt を選んでね");
 });
 
-/* =========================
-   Drag (ghost)
-   - ★固定: pinnedIds
-   - 更新順: normalOrderIds
-   ========================= */
+/* --- Drag (長押しで並び替え) --- */
 let dragState = null;
 
 function attachManualDrag(handleEl, rowEl, note){
@@ -1311,8 +1324,8 @@ function attachManualDrag(handleEl, rowEl, note){
   let timer = null;
 
   const start = (e)=>{
-    if ((elSearch.value||"").trim()) return; // 検索中は無効
-    if (selectMode) return;                  // 選択モード中は無効
+    if ((elSearch.value||"").trim()) return;
+    if (selectionMode) return;
     e.preventDefault();
     e.stopPropagation();
 
@@ -1391,6 +1404,7 @@ function onDragEnd(){
   document.removeEventListener("pointerup", onDragEnd);
 
   dragState.rowEl.classList.remove("dragging");
+
   dragState.ghost.replaceWith(dragState.rowEl);
 
   const ids = Array.from(notesEl.querySelectorAll(".rowCompact"))
@@ -1435,10 +1449,21 @@ function boot(){
 }
 boot();
 
-/* Service Worker 登録（1回だけ） */
+/* ===== Service Worker 登録（1回だけ）===== */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    navigator.serviceWorker.register("./sw.js").then((reg)=>{
+      // 更新検知（通知だけ。強制更新はしない）
+      reg.addEventListener("updatefound", ()=>{
+        const sw = reg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", ()=>{
+          if (sw.state === "installed" && navigator.serviceWorker.controller){
+            toast("更新あり。再起動で反映");
+          }
+        });
+      });
+    }).catch(()=>{});
   });
 }
 </script>

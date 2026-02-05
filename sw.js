@@ -1,4 +1,4 @@
-const CACHE_NAME = "offline-memo-final-v7";
+const CACHE_NAME = "offline-memo-final-v8";
 const APP_SHELL = [
   "./",
   "./index.html",

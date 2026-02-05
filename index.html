@@ -1452,18 +1452,21 @@ boot();
 /* ===== Service Worker 登録（1回だけ）===== */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").then((reg)=>{
-      // 更新検知（通知だけ。強制更新はしない）
-      reg.addEventListener("updatefound", ()=>{
-        const sw = reg.installing;
-        if (!sw) return;
-        sw.addEventListener("statechange", ()=>{
-          if (sw.state === "installed" && navigator.serviceWorker.controller){
-            toast("更新あり。再起動で反映");
-          }
+    navigator.serviceWorker
+      .register("./sw.js", { updateViaCache: "none" })
+      .then((reg) => {
+        reg.addEventListener("updatefound", () => {
+          const sw = reg.installing;
+          if (!sw) return;
+
+          sw.addEventListener("statechange", () => {
+            if (sw.state === "installed" && navigator.serviceWorker.controller) {
+              toast("更新あり。再起動で反映");
+            }
+          });
         });
-      });
-    }).catch(()=>{});
+      })
+      .catch(() => {});
   });
 }
 </script>

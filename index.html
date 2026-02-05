@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>offline-memo-final</title>
 
-<link rel="manifest" href="./manifest.webmanifest">
+<link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#111111">
 
 <style>
@@ -68,6 +68,14 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
 .hidden{display:none!important}
 
+/* selection checkbox on list */
+.selBox{
+  width:22px;height:22px;border:1px solid #bbb;border-radius:6px;
+  display:grid;place-items:center;font-weight:900;flex:0 0 22px;
+  user-select:none;-webkit-user-select:none;
+}
+.rowCompact.selected{border-color:#cfcfcf; background:#fafafa}
+
 /* editor */
 .input{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);font-size:16px;font-weight:900}
 .viewer,.editor{
@@ -120,6 +128,30 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   outline:2px dashed rgba(0,0,0,.25);
   border-radius:12px;height:56px;
 }
+
+/* modal */
+.overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;
+  display:flex;align-items:flex-end;justify-content:center;padding:12px;
+}
+.sheet{
+  width:min(980px,100%); background:#fff; border-radius:18px;
+  border:1px solid var(--line); box-shadow:var(--shadow);
+  padding:12px;
+}
+.sheet h3{margin:4px 0 10px;font-size:16px;font-weight:900}
+.sheet .sheetRow{display:flex;gap:8px;flex-wrap:wrap}
+.sheet .sheetRow .btn{flex:1}
+.sheet .notePick{
+  margin-top:10px; max-height:52vh; overflow:auto; border-top:1px solid var(--line); padding-top:10px;
+}
+.notePickItem{
+  display:flex;gap:10px;align-items:center;
+  padding:10px 8px;border:1px solid var(--line);border-radius:14px;
+  margin-bottom:8px;
+}
+.notePickItem .t{font-weight:900;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.notePickItem .m{font-size:12px;color:var(--muted);font-weight:800}
 </style>
 </head>
 
@@ -128,6 +160,9 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   <div class="brand">
     <h1>offline-memo-final</h1>
     <div class="row">
+      <button id="btnSelectMode" class="btn ghost" type="button">選択</button>
+      <button id="btnDeleteSelected" class="btn danger hidden" type="button">選択削除</button>
+
       <button id="btnExport" class="btn ghost" type="button">Export</button>
       <button id="btnImport" class="btn ghost" type="button">Import</button>
       <button id="btnNew" class="btn" type="button">新規</button>
@@ -189,19 +224,50 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   </div>
 </div>
 
-<input id="fileImport" type="file" class="hidden" accept=".json,.txt,application/json,text/plain">
+<!-- Modals -->
+<div id="overlayExport" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <h3>Export</h3>
+    <div class="sheetRow">
+      <button id="btnExportBackup" class="btn primary" type="button">バックアップ（JSON）</button>
+      <button id="btnExportText" class="btn" type="button">テキスト化（.txt）</button>
+      <button id="btnExportClose" class="btn ghost" type="button">閉じる</button>
+    </div>
+    <div class="muted" style="margin-top:10px">
+      ※ 編集中の未保存は、保存しないとExportに入りません
+    </div>
+  </div>
+</div>
+
+<div id="overlayTxt" class="overlay hidden" role="dialog" aria-modal="true">
+  <div class="sheet">
+    <h3>テキスト化するメモを選択</h3>
+    <div class="sheetRow">
+      <button id="btnTxtSelectAll" class="btn" type="button">全選択</button>
+      <button id="btnTxtClear" class="btn ghost" type="button">解除</button>
+      <button id="btnTxtExportGo" class="btn primary" type="button">選択分を .txt で書き出す</button>
+      <button id="btnTxtClose" class="btn ghost" type="button">閉じる</button>
+    </div>
+    <div class="muted" style="margin-top:10px">
+      ※ 選んだメモは「個別ファイル」でダウンロードされます（複数だと複数回）
+    </div>
+    <div id="txtPickList" class="notePick"></div>
+  </div>
+</div>
+
+<input id="fileImport" type="file" class="hidden" accept=".json,.txt,application/json,text/plain" multiple>
 <div id="toast" class="toast">OK</div>
 
 <script>
-  /* =========================
-   offline-memo-final v7 (backup1 update)
-   - pinnedIds / normalOrderIds を保持
-   - 保存(更新)で通常メモは更新順セクション先頭へ
-   - PWA: cache/update/offline 安定化
+/* =========================
+   offline-memo-final v7 (整理版)
+   - ★固定: pinnedIds（手動並び替え）
+   - 更新順: normalOrderIds（手動並び替え）
+   - 保存(更新)で通常メモは normalOrderIds 先頭へ
+   - Export: JSON / 選択txt
+   - List: 選択モードで複数削除
    ========================= */
 
-/* ★ここを更新のたびに変える（v7.0 -> v7.1 みたいに） */
-const APP_VERSION = "v7.1";
 const STORAGE_KEY = "offline_memo_final_v7";
 
 /* utils */
@@ -229,6 +295,42 @@ function stripTags(html){
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
+function downloadText(filename, text){
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+
+/* html -> text (checkbox line keep) */
+function htmlToPlainText(html){
+  const root = document.createElement("div");
+  root.innerHTML = html || "";
+
+  // <br> を \n に
+  root.querySelectorAll("br").forEach(br=>{
+    br.replaceWith(document.createTextNode("\n"));
+  });
+
+  // checkbox lines
+  root.querySelectorAll(".cbline").forEach(line=>{
+    const done = line.getAttribute("data-done") === "true" || line.classList.contains("done");
+    const text = (line.querySelector(".cbtext")?.textContent || line.textContent || "").trim();
+    const out = (done ? "[x] " : "[ ] ") + text + "\n";
+    line.replaceWith(document.createTextNode(out));
+  });
+
+  // 連続改行・末尾整形
+  let t = (root.textContent || "");
+  t = t.replace(/\r/g,"");
+  t = t.replace(/\n{3,}/g, "\n\n");
+  return t.trim() + "\n";
+}
 
 /* toast */
 const toastEl = document.getElementById("toast");
@@ -237,7 +339,7 @@ function toast(msg){
   toastEl.textContent = msg;
   toastEl.classList.add("show");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1400);
+  toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1200);
 }
 
 /* DOM refs */
@@ -249,6 +351,9 @@ const btnNew = document.getElementById("btnNew");
 const btnExport = document.getElementById("btnExport");
 const btnImport = document.getElementById("btnImport");
 const fileImport = document.getElementById("fileImport");
+
+const btnSelectMode = document.getElementById("btnSelectMode");
+const btnDeleteSelected = document.getElementById("btnDeleteSelected");
 
 const countPill = document.getElementById("countPill");
 const elSearch = document.getElementById("elSearch");
@@ -267,6 +372,19 @@ const saveState = document.getElementById("saveState");
 const btnBlack = document.getElementById("btnBlack");
 const btnRed = document.getElementById("btnRed");
 const btnCb = document.getElementById("btnCb");
+
+/* modals */
+const overlayExport = document.getElementById("overlayExport");
+const btnExportBackup = document.getElementById("btnExportBackup");
+const btnExportText = document.getElementById("btnExportText");
+const btnExportClose = document.getElementById("btnExportClose");
+
+const overlayTxt = document.getElementById("overlayTxt");
+const txtPickList = document.getElementById("txtPickList");
+const btnTxtSelectAll = document.getElementById("btnTxtSelectAll");
+const btnTxtClear = document.getElementById("btnTxtClear");
+const btnTxtExportGo = document.getElementById("btnTxtExportGo");
+const btnTxtClose = document.getElementById("btnTxtClose");
 
 /* store */
 function normalizeStore(s){
@@ -288,25 +406,13 @@ function normalizeStore(s){
   s.pinnedIds = s.pinnedIds.filter(id=>set.has(id));
   s.normalOrderIds = s.normalOrderIds.filter(id=>set.has(id) && !s.pinnedIds.includes(id));
 
+  // normalOrderIds が空なら、更新順で初期化
   if (s.normalOrderIds.length === 0){
     s.normalOrderIds = s.notes
       .filter(n=>!s.pinnedIds.includes(n.id))
       .sort((a,b)=>b.updatedAt-a.updatedAt)
       .map(n=>n.id);
   }
-
-  // 念のため：notesにあるのにorder配列にないIDを補完（末尾）
-  const allIds = new Set([...s.pinnedIds, ...s.normalOrderIds]);
-  s.notes.forEach(n=>{
-    if (!allIds.has(n.id)){
-      if (s.pinnedIds.includes(n.id)) return;
-      s.normalOrderIds.push(n.id);
-      allIds.add(n.id);
-    }
-  });
-
-  // normalにpinnedが混ざったら除去
-  s.normalOrderIds = s.normalOrderIds.filter(id=>!s.pinnedIds.includes(id));
 
   return s;
 }
@@ -329,15 +435,16 @@ function ensureAtLeastOne(){
   store.normalOrderIds = [n.id];
   saveStore();
 }
-
 function isPinned(id){ return store.pinnedIds.includes(id); }
 
 function pinToggle(id){
   if (isPinned(id)){
+    // unpin -> normalへ（先頭）
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
     store.normalOrderIds.unshift(id);
   }else{
+    // pin -> pinnedへ（先頭）
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
     store.pinnedIds.unshift(id);
@@ -351,6 +458,16 @@ let dirty=false;
 
 let savedTitle="", savedHtml="";
 let draftTitle="", draftHtml="";
+
+/* list selection mode */
+let selectMode = false;
+let selectedIds = new Set();
+
+function updateSelectUI(){
+  btnSelectMode.textContent = selectMode ? "完了" : "選択";
+  btnDeleteSelected.classList.toggle("hidden", !selectMode);
+  btnDeleteSelected.disabled = selectedIds.size === 0;
+}
 
 /* dirty + screens */
 function updateDirtyFlag(){
@@ -401,9 +518,12 @@ function buildList(){
   const byId = new Map(notes.map(n=>[n.id,n]));
 
   let pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
-  let normalIds = store.normalOrderIds.slice().filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
+  let normalIds = store.normalOrderIds.slice();
+
+  normalIds = normalIds.filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
   let normal = normalIds.map(id=>byId.get(id)).filter(Boolean);
 
+  // 検索時：表示上は更新順寄せ（ドラッグ無効）
   if (q){
     const filtered = notes.filter(n=>{
       const t = (n.title||"").toLowerCase();
@@ -426,6 +546,16 @@ function renderRow(note, searching){
   const row = document.createElement("div");
   row.className = "rowCompact";
   row.dataset.id = note.id;
+
+  // selection checkbox
+  let selEl = null;
+  if (selectMode){
+    selEl = document.createElement("div");
+    selEl.className = "selBox";
+    const on = selectedIds.has(note.id);
+    selEl.textContent = on ? "✓" : "";
+    row.classList.toggle("selected", on);
+  }
 
   const left = document.createElement("div");
   left.className = "rowLeft";
@@ -461,9 +591,21 @@ function renderRow(note, searching){
   delBtn.textContent = "🗑";
 
   actions.append(dragBtn, starBtn, delBtn);
-  row.append(left, actions);
 
-  row.addEventListener("click", ()=> openNote(note.id));
+  if (selEl) row.append(selEl, left, actions);
+  else row.append(left, actions);
+
+  row.addEventListener("click", ()=>{
+    if (selectMode){
+      // toggle select
+      if (selectedIds.has(note.id)) selectedIds.delete(note.id);
+      else selectedIds.add(note.id);
+      updateSelectUI();
+      renderList();
+      return;
+    }
+    openNote(note.id);
+  });
 
   starBtn.addEventListener("click", (e)=>{
     e.stopPropagation();
@@ -476,22 +618,30 @@ function renderRow(note, searching){
   delBtn.addEventListener("click", (e)=>{
     e.stopPropagation();
     if (!confirm("削除しますか？")) return;
-    store.notes = store.notes.filter(n=>n.id!==note.id);
-    store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
-    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
-    ensureAtLeastOne();
-    saveStore();
-    renderList();
+    removeNotesByIds([note.id]);
     toast("削除しました");
   });
 
-  if (!searching){
+  // ドラッグ（検索中 or 選択モード中は無効）
+  if (!searching && !selectMode){
     attachManualDrag(dragBtn, row, note);
   }else{
     dragBtn.style.opacity = "0.35";
   }
 
   return row;
+}
+
+function removeNotesByIds(ids){
+  const set = new Set(ids);
+  store.notes = store.notes.filter(n=>!set.has(n.id));
+  store.pinnedIds = store.pinnedIds.filter(x=>!set.has(x));
+  store.normalOrderIds = store.normalOrderIds.filter(x=>!set.has(x));
+  ensureAtLeastOne();
+  saveStore();
+  selectedIds = new Set([...selectedIds].filter(id=>!set.has(id)));
+  renderList();
+  updateSelectUI();
 }
 
 /* render */
@@ -545,7 +695,7 @@ function openNote(id){
   history.pushState({screen:"edit", id: currentId}, "");
 }
 
-/* events */
+/* events: search/new/selectmode */
 elSearch.addEventListener("input", ()=> renderList());
 
 btnNew.addEventListener("click", ()=>{
@@ -570,6 +720,21 @@ btnNew.addEventListener("click", ()=>{
   updateDirtyFlag();
   resetUndoRedo();
 });
+
+btnSelectMode.addEventListener("click", ()=>{
+  selectMode = !selectMode;
+  if (!selectMode) selectedIds.clear();
+  updateSelectUI();
+  renderList();
+});
+btnDeleteSelected.addEventListener("click", ()=>{
+  if (selectedIds.size === 0) return;
+  if (!confirm(`選択した ${selectedIds.size} 件を削除しますか？`)) return;
+  removeNotesByIds([...selectedIds]);
+  toast("削除しました");
+});
+updateSelectUI();
+
 /* =========================
    checkbox + color + undo/redo + save/back
    ========================= */
@@ -633,7 +798,7 @@ function schedulePushSnapshot(){
 function resetUndoRedo(){
   undoStack = [];
   redoStack = [];
-  pushUndoSnapshot();
+  pushUndoSnapshot(); // init
   refreshUndoButtons();
 }
 
@@ -920,17 +1085,36 @@ btnDeleteInEdit.addEventListener("click", ()=>{
   const name = (note.title||"").trim() ? note.title : "（無題）";
   if (!confirm(`「${name}」を削除しますか？\nよろしいですか？`)) return;
 
-  store.notes = store.notes.filter(n=>n.id!==note.id);
-  store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
-  store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
-  ensureAtLeastOne();
-  saveStore();
+  removeNotesByIds([note.id]);
   toast("削除しました");
   showList();
 });
 
-/* Export / Import (.json置換 / .txt追記) */
+/* =========================
+   Export / Import
+   - Export: JSON or selected txt
+   - Import: .json replace / .txt create note(s) (multiple ok)
+   ========================= */
+
+function openOverlay(el){
+  el.classList.remove("hidden");
+}
+function closeOverlay(el){
+  el.classList.add("hidden");
+}
+overlayExport.addEventListener("click", (e)=>{
+  if (e.target === overlayExport) closeOverlay(overlayExport);
+});
+overlayTxt.addEventListener("click", (e)=>{
+  if (e.target === overlayTxt) closeOverlay(overlayTxt);
+});
+
 btnExport.addEventListener("click", ()=>{
+  openOverlay(overlayExport);
+});
+btnExportClose.addEventListener("click", ()=> closeOverlay(overlayExport));
+
+function exportBackupJson(){
   if (!screenEdit.classList.contains("hidden") && dirty){
     const ok = confirm("編集中の未保存内容があります。\n保存せずにExportすると未保存分は入りません。\n続けますか？");
     if (!ok) return;
@@ -950,6 +1134,112 @@ btnExport.addEventListener("click", ()=>{
 
   setTimeout(()=> URL.revokeObjectURL(url), 1000);
   toast("書き出しました");
+}
+
+btnExportBackup.addEventListener("click", ()=>{
+  closeOverlay(overlayExport);
+  exportBackupJson();
+});
+
+let txtSelected = new Set();
+
+function renderTxtPicker(){
+  txtPickList.innerHTML = "";
+
+  const notes = store.notes.slice();
+  // 表示は「固定→更新順」の見た目に寄せる
+  const byId = new Map(notes.map(n=>[n.id,n]));
+  const pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
+  const normal = store.normalOrderIds.map(id=>byId.get(id)).filter(Boolean);
+
+  const addItem = (n)=>{
+    const item = document.createElement("div");
+    item.className = "notePickItem";
+
+    const box = document.createElement("div");
+    box.className = "selBox";
+    box.textContent = txtSelected.has(n.id) ? "✓" : "";
+
+    const t = document.createElement("div");
+    t.className = "t";
+    t.textContent = (n.title||"").trim() ? n.title : "（無題）";
+
+    const m = document.createElement("div");
+    m.className = "m";
+    m.textContent = fmt(n.updatedAt);
+
+    const right = document.createElement("div");
+    right.style.display="flex";
+    right.style.flexDirection="column";
+    right.style.gap="2px";
+    right.append(t,m);
+
+    item.append(box, right);
+
+    item.addEventListener("click", ()=>{
+      if (txtSelected.has(n.id)) txtSelected.delete(n.id);
+      else txtSelected.add(n.id);
+      renderTxtPicker();
+    });
+
+    txtPickList.appendChild(item);
+  };
+
+  if (pinned.length){
+    const lab = document.createElement("div");
+    lab.className="muted";
+    lab.style.margin="0 0 6px 2px";
+    lab.textContent="★ 固定";
+    txtPickList.appendChild(lab);
+    pinned.forEach(addItem);
+  }
+
+  const lab2 = document.createElement("div");
+  lab2.className="muted";
+  lab2.style.margin="10px 0 6px 2px";
+  lab2.textContent="更新順";
+  txtPickList.appendChild(lab2);
+  normal.forEach(addItem);
+
+  btnTxtExportGo.disabled = txtSelected.size===0;
+}
+
+btnExportText.addEventListener("click", ()=>{
+  closeOverlay(overlayExport);
+  txtSelected = new Set();
+  renderTxtPicker();
+  openOverlay(overlayTxt);
+});
+btnTxtClose.addEventListener("click", ()=> closeOverlay(overlayTxt));
+
+btnTxtSelectAll.addEventListener("click", ()=>{
+  txtSelected = new Set(store.notes.map(n=>n.id));
+  renderTxtPicker();
+});
+btnTxtClear.addEventListener("click", ()=>{
+  txtSelected.clear();
+  renderTxtPicker();
+});
+btnTxtExportGo.addEventListener("click", ()=>{
+  if (txtSelected.size===0) return;
+
+  // 連続DLになるので最初に一言
+  toast("ダウンロード開始");
+
+  const ids = [...txtSelected];
+  ids.forEach((id, idx)=>{
+    const n = getNote(id);
+    if (!n) return;
+    const title = (n.title||"").trim() ? n.title.trim() : "無題";
+    const safe = title.replace(/[\\\/:*?"<>|]/g, "_").slice(0, 80);
+    const filename = `memo-${safe}-${stampForFile()}-${idx+1}.txt`;
+
+    const header = `${title}\n更新: ${fmt(n.updatedAt)}\n\n`;
+    const body = htmlToPlainText(n.bodyHtml||"");
+    downloadText(filename, header + body);
+  });
+
+  closeOverlay(overlayTxt);
 });
 
 btnImport.addEventListener("click", ()=>{
@@ -958,42 +1248,62 @@ btnImport.addEventListener("click", ()=>{
 });
 
 fileImport.addEventListener("change", async ()=>{
-  const f = fileImport.files && fileImport.files[0];
-  if (!f) return;
+  const files = fileImport.files ? Array.from(fileImport.files) : [];
+  if (!files.length) return;
 
-  const name = (f.name||"").toLowerCase();
+  // JSONが混ざってるなら「JSON置換」を優先（1個目のjsonのみ）
+  const jsonFile = files.find(f => (f.name||"").toLowerCase().endsWith(".json"));
+  const txtFiles = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
 
   try{
-    const text = await f.text();
+    if (jsonFile){
+      const ok = confirm("JSONをインポートすると現在のメモを全て置き換えます。\nよろしいですか？");
+      if (!ok) return;
 
-    if (name.endsWith(".txt")){
-      const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
-      const n = { id: uid(), title: f.name.replace(/\.txt$/i,""), bodyHtml: body, createdAt: nowTs(), updatedAt: nowTs() };
-      store.notes.unshift(n);
-
-      store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
-      store.normalOrderIds.unshift(n.id);
-
+      const text = await jsonFile.text();
+      const obj = safeParse(text, null);
+      if (!obj || !obj.data) throw new Error("invalid");
+      store = normalizeStore(obj.data);
+      ensureAtLeastOne();
       saveStore();
-      renderList();
-      toast(".txt を取り込みました");
+      toast("インポートしました");
+      showList();
       return;
     }
 
-    const obj = safeParse(text, null);
-    if (!obj || !obj.data) throw new Error("invalid");
-    store = normalizeStore(obj.data);
+    if (txtFiles.length){
+      // 複数txt -> それぞれ1メモ追加
+      for (const f of txtFiles){
+        const text = await f.text();
+        const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
+        const n = {
+          id: uid(),
+          title: (f.name||"").replace(/\.txt$/i,""),
+          bodyHtml: body,
+          createdAt: nowTs(),
+          updatedAt: nowTs()
+        };
+        store.notes.unshift(n);
+        store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+        store.normalOrderIds.unshift(n.id);
+      }
+      saveStore();
+      renderList();
+      toast(`${txtFiles.length}件 取り込みました`);
+      return;
+    }
 
-    ensureAtLeastOne();
-    saveStore();
-    toast("インポートしました");
-    showList();
+    alert("インポート失敗：.json か .txt を選んでね");
   }catch(e){
     alert("インポート失敗：ファイル形式が違うか壊れてます");
   }
 });
 
-/* Drag: pinnedIds / normalOrderIds */
+/* =========================
+   Drag (ghost)
+   - ★固定: pinnedIds
+   - 更新順: normalOrderIds
+   ========================= */
 let dragState = null;
 
 function attachManualDrag(handleEl, rowEl, note){
@@ -1001,7 +1311,8 @@ function attachManualDrag(handleEl, rowEl, note){
   let timer = null;
 
   const start = (e)=>{
-    if ((elSearch.value||"").trim()) return;
+    if ((elSearch.value||"").trim()) return; // 検索中は無効
+    if (selectMode) return;                  // 選択モード中は無効
     e.preventDefault();
     e.stopPropagation();
 
@@ -1039,7 +1350,7 @@ function beginDrag(rowEl, note){
   rowEl.after(ghost);
   rowEl.classList.add("dragging");
 
-  dragState = { rowEl, ghost, pinned };
+  dragState = { rowEl, note, ghost, pinned };
   toast("ドラッグで並び替え");
 }
 
@@ -1082,7 +1393,8 @@ function onDragEnd(){
   dragState.rowEl.classList.remove("dragging");
   dragState.ghost.replaceWith(dragState.rowEl);
 
-  const ids = Array.from(notesEl.querySelectorAll(".rowCompact")).map(el=>el.dataset.id);
+  const ids = Array.from(notesEl.querySelectorAll(".rowCompact"))
+    .map(el=>el.dataset.id);
 
   if (dragState.pinned){
     store.pinnedIds = ids.filter(id=>isPinned(id));
@@ -1123,50 +1435,12 @@ function boot(){
 }
 boot();
 
-/* =========================
-   PWA: Service Worker 登録 & 更新通知
-   ========================= */
-(function registerSW(){
-  if (!("serviceWorker" in navigator)) return;
-
-  let reloading = false;
-
-  window.addEventListener("load", async ()=>{
-    try{
-      const reg = await navigator.serviceWorker.register(`./sw.js?v=${encodeURIComponent(APP_VERSION)}`);
-
-      // すでに更新SWが待機してる場合
-      if (reg.waiting){
-        toast("更新あり。再起動で反映");
-      }
-
-      // update found
-      reg.addEventListener("updatefound", ()=>{
-        const newWorker = reg.installing;
-        if (!newWorker) return;
-        newWorker.addEventListener("statechange", ()=>{
-          if (newWorker.state === "installed"){
-            if (navigator.serviceWorker.controller){
-              toast("更新あり。再起動で反映");
-            }
-          }
-        });
-      });
-
-      // コントローラーが切り替わったら1回だけリロード
-      navigator.serviceWorker.addEventListener("controllerchange", ()=>{
-        if (reloading) return;
-        reloading = true;
-        location.reload();
-      });
-
-      // 起動時に更新チェック
-      reg.update().catch(()=>{});
-    }catch(_){
-      // 失敗してもアプリ自体は動かす
-    }
+/* Service Worker 登録（1回だけ） */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
   });
-})();
+}
 </script>
 </body>
 </html>

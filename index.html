@@ -262,7 +262,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
    - 選択メニュー：テキスト化 / 削除 / 解除
    - Export：バックアップ or テキスト化（1件=txt / 複数=zip）
    - Import：.json置換 / .txt複数→各1メモ追加
-   - cbline Enter根治：beforeinput + input補正
+   - cbline Enter根治：beforeinput + 先頭Enter例外 + Backspace/Deleteでチェック解除
    ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
@@ -388,7 +388,6 @@ const btnModalCancel = document.getElementById("btnModalCancel");
 
 const updateModalBg = document.getElementById("updateModalBg");
 const btnReloadNow = document.getElementById("btnReloadNow");
-const btnReloadLater = document.getElementById("btnReloadLater");
 
 /* store */
 function normalizeStore(s){
@@ -490,11 +489,6 @@ btnSelDelete.addEventListener("click", ()=>{
   if (selectedIds.size === 0) return;
   deleteNotes(Array.from(selectedIds));
 });
-btnSelText.addEventListener("click", ()=>{
-  if (selectedIds.size === 0) return;
-  // 既存の処理を使う（btnDoTextはselectionMode/selectedIdsを見る）
-  btnDoText.click();
-});
 
 /* UI state */
 let currentId=null;
@@ -554,6 +548,7 @@ function buildList(){
   }
   return { pinned, normal, searching:false };
 }
+
 /* row */
 function renderRow(note, searching){
   const row = document.createElement("div");
@@ -640,7 +635,7 @@ function renderRow(note, searching){
   return row;
 }
 
-/* render list (軽量) */
+/* render list */
 function renderList(){
   countPill.textContent = `${store.notes.length}件`;
 
@@ -693,7 +688,6 @@ function openNote(id, isNew){
   resetUndoRedo();
   updateDirtyFlag();
 
-  // フォーカス仕様：新規=タイトル / 既存=本文
   if (openedByNew) setTimeout(()=> elTitle.focus(), 0);
   else setTimeout(()=> editor.focus(), 0);
 
@@ -715,7 +709,6 @@ function deleteNotes(ids){
   ensureAtLeastOne();
   saveStore();
 
-  // 選択モード終了
   selectionMode = false;
   selectedIds.clear();
   updateTopActions();
@@ -747,14 +740,14 @@ btnNew.addEventListener("click", ()=>{
   updateDirtyFlag();
   resetUndoRedo();
 });
-
 /* =========================
    editor / checkbox / undo / save
    ========================= */
 
 function cleanHtml(html){
-  // stray <div><br></div> を plainlineに統一
-  return (html||"")
+  // stray <div><br></div> を plainlineに統一（強め）
+  const safe = (html||"");
+  return safe
     .replace(/<div><br><\/div>/gi, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`)
     .replace(/<div class="plainline"><br><\/div>/gi, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`)
     .replace(/<div class="plainline">\u200B<\/div>/g, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`);
@@ -863,7 +856,7 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter 根治 ---- */
+/* ---- Enter 根治 + Backspace/Deleteでチェック解除 ---- */
 function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -874,6 +867,14 @@ function getCaretOffsetInElement(el){
   pre.selectNodeContents(el);
   pre.setEnd(range.startContainer, range.startOffset);
   return pre.toString().length;
+}
+
+function cblineToPlainline(cbline){
+  const cbtext = cbline.querySelector(".cbtext");
+  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
+  const pl = makePlainLine(text.trim() ? text : "");
+  cbline.replaceWith(pl);
+  setTimeout(()=>setCaretToStart(pl),0);
 }
 
 function handleEnterInsideCbline(){
@@ -907,12 +908,23 @@ function handleEnterInsideCbline(){
   try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
   const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
 
+  // ★先頭Enterのときは「空のcbline（☐だけ）」を作らない
+  // → 上にplainlineを1行挿入して、そこにカーソルを置く
+  if (cut === 0){
+    const plUp = makePlainLine("");
+    cbline.before(plUp);
+    setTimeout(()=>setCaretToStart(plUp),0);
+    draftHtml = cleanHtml(editor.innerHTML);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+    return true;
+  }
+
   const left = full.slice(0, cut);
   const right = full.slice(cut);
 
   cbtext.textContent = left;
 
-  // cbline直後に必ずplainlineを作る
   const pl = makePlainLine(right);
   cbline.after(pl);
 
@@ -924,7 +936,41 @@ function handleEnterInsideCbline(){
   return true;
 }
 
-/* ★beforeinputで確実に止める */
+function handleBackspaceDeleteOnCbline(key){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  if (!sel.isCollapsed) return false;
+
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
+
+  const cbline = node?.closest?.(".cbline");
+  if (!cbline) return false;
+
+  const cbtext = cbline.querySelector(".cbtext");
+  if (!cbtext) return false;
+
+  let caret = null;
+  try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
+  // caret取れない端末は「消せない」を避けるため、チェック解除に倒す
+  const atStart = (caret == null) ? true : (caret === 0);
+
+  // text先頭で Backspace/Delete → チェックだけ外して通常行に戻す
+  if (atStart && (key === "Backspace" || key === "Delete")){
+    pushUndoSnapshot();
+    cblineToPlainline(cbline);
+    draftHtml = cleanHtml(editor.innerHTML);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+    return true;
+  }
+
+  return false;
+}
+
+/* ★beforeinputでEnterを確実に止める */
 editor.addEventListener("beforeinput", (e)=>{
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
@@ -945,13 +991,22 @@ editor.addEventListener("beforeinput", (e)=>{
   }
 });
 
-/* keydownも保険 */
+/* keydown：Enter/Backspace/Delete を補足 */
 editor.addEventListener("keydown", (e)=>{
   if (e.key === "Enter"){
     const handled = handleEnterInsideCbline();
     if (handled){
       e.preventDefault();
       e.stopPropagation();
+      return;
+    }
+  }
+  if (e.key === "Backspace" || e.key === "Delete"){
+    const handled = handleBackspaceDeleteOnCbline(e.key);
+    if (handled){
+      e.preventDefault();
+      e.stopPropagation();
+      return;
     }
   }
 });
@@ -1197,6 +1252,7 @@ btnDoBackup.addEventListener("click", ()=>{
   setTimeout(()=> URL.revokeObjectURL(url), 800);
   toast("バックアップを書き出しました");
 });
+
 /* ---- ZIP（store） ---- */
 function crc32Table(){
   const table = new Uint32Array(256);
@@ -1311,10 +1367,8 @@ function buildUniqueNames(notes){
   return out;
 }
 
-/* text export */
-btnDoText.addEventListener("click", ()=>{
-  closeExportModal();
-
+/* text export（関数化：上の「テキスト化」ボタンからも呼ぶ） */
+function doTextExport(){
   if (!selectionMode || selectedIds.size === 0){
     toast("テキスト化するメモを ☑ で選んでね");
     return;
@@ -1367,6 +1421,17 @@ btnDoText.addEventListener("click", ()=>{
 
   toast("ZIPを書き出しました");
   setSelectionMode(false);
+}
+
+/* modal内のテキスト化 */
+btnDoText.addEventListener("click", ()=>{
+  closeExportModal();
+  doTextExport();
+});
+
+/* 上部（選択モード）のテキスト化：モーダル無しで直接実行 */
+btnSelText.addEventListener("click", ()=>{
+  doTextExport();
 });
 
 /* Import */
@@ -1569,11 +1634,6 @@ function boot(){
   history.replaceState({screen:"list"}, "");
 }
 boot();
-
-/* Export/Importモーダルからの「テキスト化」実行後も、選択モードは解除 */
-exportModalBg.addEventListener("transitionend", ()=>{
-  // noop（将来用）
-});
 
 /* SW register */
 if ("serviceWorker" in navigator) {

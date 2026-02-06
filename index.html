@@ -258,11 +258,8 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 <script>
 /* =========================
    offline-memo-final v7 (backup1 stabilized)
-   - 選択モード：☑で開始 / 全解除で終了
-   - 選択メニュー：テキスト化 / 削除 / 解除
-   - Export：バックアップ or テキスト化（1件=txt / 複数=zip）
-   - Import：.json置換 / .txt複数→各1メモ追加
-   - cbline Enter/削除 根治：beforeinput（Android本命）+ 先頭Enter例外 + Backspace/Deleteで解除
+   - cbline Enter根治：beforeinput + 先頭Enter例外
+   - cbline解除：Backspace/Delete（Gboardはbeforeinputが本命）
    ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
@@ -634,7 +631,6 @@ function renderRow(note, searching){
 
   return row;
 }
-
 /* render list */
 function renderList(){
   countPill.textContent = `${store.notes.length}件`;
@@ -740,6 +736,7 @@ btnNew.addEventListener("click", ()=>{
   updateDirtyFlag();
   resetUndoRedo();
 });
+
 /* =========================
    editor / checkbox / undo / save
    ========================= */
@@ -856,7 +853,7 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter安定化 + Backspace/Deleteでチェック解除（Android対応） ---- */
+/* ---- Enter 根治 + Backspace/Deleteでチェック解除（Gboard対応）---- */
 function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -869,30 +866,12 @@ function getCaretOffsetInElement(el){
   return pre.toString().length;
 }
 
-function getClosestCblineFromSelection(){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  let node = range.startContainer;
-  if (!node) return null;
-  if (node.nodeType === 3) node = node.parentNode;
-  return node?.closest?.(".cbline") || null;
-}
-
-function cblineToPlainline(cbline, focusWhere="start"){
+function cblineToPlainline(cbline){
   const cbtext = cbline.querySelector(".cbtext");
-  const raw = (cbtext?.textContent || "").replaceAll(ZWSP,"");
-  const text = raw.trim();
-
-  const pl = makePlainLine(text ? text : "");
+  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
+  const pl = makePlainLine(text.trim() ? text : "");
   cbline.replaceWith(pl);
-
-  setTimeout(()=>{
-    if (focusWhere === "end") setCaretToEnd(pl);
-    else setCaretToStart(pl);
-  }, 0);
-
-  return pl;
+  setTimeout(()=>setCaretToStart(pl),0);
 }
 
 function handleEnterInsideCbline(){
@@ -900,7 +879,12 @@ function handleEnterInsideCbline(){
   if (!sel || sel.rangeCount === 0) return false;
   if (!sel.isCollapsed) return false;
 
-  const cbline = getClosestCblineFromSelection();
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
+
+  const cbline = node?.closest?.(".cbline");
   if (!cbline) return false;
 
   const cbtext = cbline.querySelector(".cbtext");
@@ -921,12 +905,11 @@ function handleEnterInsideCbline(){
   try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
   const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
 
-  // ✅ 先頭Enter：空のcbline(☐だけ)を作らず、上に空行を作ってそこへ
+  // ✅ 先頭Enter：空のcbline（☐だけ）を作らず、上に空行を作る
   if (cut === 0){
     const plUp = makePlainLine("");
     cbline.before(plUp);
     setTimeout(()=>setCaretToStart(plUp),0);
-
     draftHtml = cleanHtml(editor.innerHTML);
     updateDirtyFlag();
     schedulePushSnapshot();
@@ -940,6 +923,7 @@ function handleEnterInsideCbline(){
 
   const pl = makePlainLine(right);
   cbline.after(pl);
+
   setTimeout(()=>setCaretToStart(pl),0);
 
   draftHtml = cleanHtml(editor.innerHTML);
@@ -948,13 +932,17 @@ function handleEnterInsideCbline(){
   return true;
 }
 
-// ✅ cbtext先頭でBackspace/Delete → チェック行→通常行に戻す（消せない問題の根治）
 function handleBackspaceDeleteOnCbline(key){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
   if (!sel.isCollapsed) return false;
 
-  const cbline = getClosestCblineFromSelection();
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
+
+  const cbline = node?.closest?.(".cbline");
   if (!cbline) return false;
 
   const cbtext = cbline.querySelector(".cbtext");
@@ -963,10 +951,57 @@ function handleBackspaceDeleteOnCbline(key){
   let caret = null;
   try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
   const atStart = (caret == null) ? true : (caret === 0);
-  if (!atStart) return false;
+
+  // ✅ cbtext先頭で Backspace/Delete → チェック解除して通常行へ
+  if (atStart && (key === "Backspace" || key === "Delete")){
+    pushUndoSnapshot();
+    cblineToPlainline(cbline);
+    draftHtml = cleanHtml(editor.innerHTML);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+    return true;
+  }
+  return false;
+}
+
+// ✅ 追加：チェック化直後は「空のplainline先頭」にカーソルがいる → そこで削除したら直前cblineを解除
+function handleBackspaceAtStartOfPlainline(key){
+  if (key !== "Backspace" && key !== "Delete") return false;
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  if (!sel.isCollapsed) return false;
+
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
+
+  const pl = node?.closest?.(".plainline");
+  if (!pl) return false;
+
+  let caret = null;
+  try{ caret = getCaretOffsetInElement(pl); }catch(_){ caret = null; }
+  if (caret != null && caret !== 0) return false;
+
+  const prev = pl.previousElementSibling;
+  if (!prev || !prev.classList.contains("cbline")) return false;
 
   pushUndoSnapshot();
-  cblineToPlainline(cbline, "start");
+
+  // cbline → plainline
+  const cbtext = prev.querySelector(".cbtext");
+  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
+  const newPl = makePlainLine(text.trim() ? text : "");
+  prev.replaceWith(newPl);
+
+  // 現在の空行(pl)が空なら消す（空白増殖防止）
+  const plText = (pl.textContent || "").replaceAll(ZWSP,"").trim();
+  if (!plText){
+    pl.remove();
+  }
+
+  setTimeout(()=>setCaretToStart(newPl), 0);
 
   draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
@@ -974,7 +1009,7 @@ function handleBackspaceDeleteOnCbline(key){
   return true;
 }
 
-/* ★beforeinput：Androidの本命（Enter/削除はここで来ることが多い） */
+/* ★beforeinput：Enterも削除もここで確実に止める（Gboardの本命） */
 editor.addEventListener("beforeinput", (e)=>{
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
@@ -987,26 +1022,23 @@ editor.addEventListener("beforeinput", (e)=>{
       (data.includes("\n") || data.includes("\r")));
 
   if (looksLikeEnter){
-    const handled = handleEnterInsideCbline();
-    if (handled){
+    if (handleEnterInsideCbline()){
       e.preventDefault();
       e.stopPropagation();
     }
     return;
   }
 
+  // 削除系：Gboardはこっちで来ることが多い
   if (t === "deleteContentBackward"){
-    const handled = handleBackspaceDeleteOnCbline("Backspace");
-    if (handled){
+    if (handleBackspaceDeleteOnCbline("Backspace") || handleBackspaceAtStartOfPlainline("Backspace")){
       e.preventDefault();
       e.stopPropagation();
     }
     return;
   }
-
   if (t === "deleteContentForward"){
-    const handled = handleBackspaceDeleteOnCbline("Delete");
-    if (handled){
+    if (handleBackspaceDeleteOnCbline("Delete") || handleBackspaceAtStartOfPlainline("Delete")){
       e.preventDefault();
       e.stopPropagation();
     }
@@ -1014,19 +1046,17 @@ editor.addEventListener("beforeinput", (e)=>{
   }
 });
 
-/* keydown：一部端末の保険 */
+/* keydown：来る端末もあるので保険 */
 editor.addEventListener("keydown", (e)=>{
   if (e.key === "Enter"){
-    const handled = handleEnterInsideCbline();
-    if (handled){
+    if (handleEnterInsideCbline()){
       e.preventDefault();
       e.stopPropagation();
       return;
     }
   }
   if (e.key === "Backspace" || e.key === "Delete"){
-    const handled = handleBackspaceDeleteOnCbline(e.key);
-    if (handled){
+    if (handleBackspaceDeleteOnCbline(e.key) || handleBackspaceAtStartOfPlainline(e.key)){
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -1389,7 +1419,7 @@ function buildUniqueNames(notes){
   return out;
 }
 
-/* text export（関数化：上の「テキスト化」ボタンからも呼ぶ） */
+/* text export（関数化） */
 function doTextExport(){
   if (!selectionMode || selectedIds.size === 0){
     toast("テキスト化するメモを ☑ で選んでね");
@@ -1451,7 +1481,7 @@ btnDoText.addEventListener("click", ()=>{
   doTextExport();
 });
 
-/* 上部（選択モード）のテキスト化：モーダル無しで直接実行 */
+/* 上部（選択モード）のテキスト化：直接実行 */
 btnSelText.addEventListener("click", ()=>{
   doTextExport();
 });

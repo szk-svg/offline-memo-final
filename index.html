@@ -109,6 +109,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
 /* plain line helper */
 .plainline{min-height:1.2em}
+.zwsp{user-select:none;-webkit-user-select:none}
 
 /* toast */
 .toast{
@@ -158,13 +159,13 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
       <button id="btnNew" class="btn" type="button">新規</button>
     </div>
 
-    <!-- 選択モードメニュー（ここに「複数削除」を復活） -->
-   <div id="topActionsSelect" class="row hidden">
-  <div class="pill" id="selCountPill">選択: 0</div>
-  <button id="btnSelText" class="btn" type="button">テキスト化</button>
-  <button id="btnSelDelete" class="btn danger" type="button">削除</button>
-  <button id="btnSelCancel" class="btn ghost" type="button">解除</button>
-</div>
+    <!-- 選択モード -->
+    <div id="topActionsSelect" class="row hidden">
+      <div class="pill" id="selCountPill">選択: 0</div>
+      <button id="btnSelText" class="btn" type="button">テキスト化</button>
+      <button id="btnSelDelete" class="btn danger" type="button">削除</button>
+      <button id="btnSelCancel" class="btn ghost" type="button">解除</button>
+    </div>
   </div>
 </div>
 
@@ -256,12 +257,12 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
 <script>
 /* =========================
-   offline-memo-final v7 (backup1)
-   - 選択モード：☑で開始 / 全解除で終了 / 選択中は行タップ=選択
-   - 選択中メニュー：削除 / 解除
+   offline-memo-final v7 (backup1 stabilized)
+   - 選択モード：☑で開始 / 全解除で終了
+   - 選択メニュー：テキスト化 / 削除 / 解除
    - Export：バックアップ or テキスト化（1件=txt / 複数=zip）
    - Import：.json置換 / .txt複数→各1メモ追加
-   - cbline Enter安定化：beforeinputで段落挿入を確実に止める
+   - cbline Enter根治：beforeinput + input補正
    ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
@@ -302,22 +303,35 @@ function htmlToText(html){
   });
   return (div.textContent || "").replace(/\u200B/g,"").replace(/\r/g,"").trim();
 }
-const ZWSP = "\u200B";
 
-function makePlainLine(){
+/* plainline（空行も必ずカーソル置ける形に統一） */
+function makePlainLine(text=""){
   const div = document.createElement("div");
   div.className = "plainline";
-  // ZWSP + br で「確実にカーソルが置ける空行」にする
-  div.innerHTML = `<span class="zwsp">${ZWSP}</span><br>`;
+  if (text && text.length){
+    div.textContent = text;
+  }else{
+    div.innerHTML = `<span class="zwsp">${ZWSP}</span><br>`;
+  }
   return div;
 }
 
-function setCaretTo(el, atEnd=false){
+/* caret */
+function setCaretToStart(el){
   const sel = window.getSelection();
   if (!sel) return;
   const r = document.createRange();
   r.selectNodeContents(el);
-  r.collapse(!atEnd ? true : false);
+  r.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+function setCaretToEnd(el){
+  const sel = window.getSelection();
+  if (!sel) return;
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(false);
   sel.removeAllRanges();
   sel.addRange(r);
 }
@@ -374,6 +388,8 @@ const btnModalCancel = document.getElementById("btnModalCancel");
 
 const updateModalBg = document.getElementById("updateModalBg");
 const btnReloadNow = document.getElementById("btnReloadNow");
+const btnReloadLater = document.getElementById("btnReloadLater");
+
 /* store */
 function normalizeStore(s){
   if (!s || typeof s !== "object") s = {};
@@ -442,6 +458,7 @@ function updateTopActions(){
     topActionsSelect.classList.remove("hidden");
     selCountPill.textContent = `選択: ${selectedIds.size}`;
     btnSelDelete.disabled = selectedIds.size === 0;
+    btnSelText.disabled = selectedIds.size === 0;
   }else{
     topActionsSelect.classList.add("hidden");
     topActionsNormal.classList.remove("hidden");
@@ -473,20 +490,11 @@ btnSelDelete.addEventListener("click", ()=>{
   if (selectedIds.size === 0) return;
   deleteNotes(Array.from(selectedIds));
 });
-if (btnSelText && btnDoText){
-  btnSelText.addEventListener("click", ()=>{
-    if (selectedIds.size === 0){
-      toast("テキスト化するメモを選んでね");
-      return;
-    }
-
-    // 既存の「テキスト化 / zip」処理をそのまま使う
-    btnDoText.click();
-
-    // 実行後は選択モード解除
-    setSelectionMode(false);
-  });
-}
+btnSelText.addEventListener("click", ()=>{
+  if (selectedIds.size === 0) return;
+  // 既存の処理を使う（btnDoTextはselectionMode/selectedIdsを見る）
+  btnDoText.click();
+});
 
 /* UI state */
 let currentId=null;
@@ -546,7 +554,6 @@ function buildList(){
   }
   return { pinned, normal, searching:false };
 }
-
 /* row */
 function renderRow(note, searching){
   const row = document.createElement("div");
@@ -687,11 +694,8 @@ function openNote(id, isNew){
   updateDirtyFlag();
 
   // フォーカス仕様：新規=タイトル / 既存=本文
-  if (openedByNew){
-    setTimeout(()=> elTitle.focus(), 0);
-  }else{
-    setTimeout(()=> editor.focus(), 0);
-  }
+  if (openedByNew) setTimeout(()=> elTitle.focus(), 0);
+  else setTimeout(()=> editor.focus(), 0);
 
   history.pushState({screen:"edit", id: currentId}, "");
 }
@@ -743,14 +747,17 @@ btnNew.addEventListener("click", ()=>{
   updateDirtyFlag();
   resetUndoRedo();
 });
+
 /* =========================
    editor / checkbox / undo / save
    ========================= */
 
 function cleanHtml(html){
+  // stray <div><br></div> を plainlineに統一
   return (html||"")
-    .replace(/<div><br><\/div>/g, `<div class="plainline">${ZWSP}</div>`)
-    .replace(/<div class="plainline"><br><\/div>/g, `<div class="plainline">${ZWSP}</div>`);
+    .replace(/<div><br><\/div>/gi, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`)
+    .replace(/<div class="plainline"><br><\/div>/gi, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`)
+    .replace(/<div class="plainline">\u200B<\/div>/g, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`);
 }
 
 /* checkbox helpers */
@@ -778,12 +785,6 @@ function syncDraftFromCurrent(){
   editor.innerHTML = draftHtml;
   normalizeCbLines(editor);
   updateDirtyFlag();
-}
-
-/* dirty */
-function updateDirtyFlag(){
-  dirty = (draftTitle !== savedTitle) || (draftHtml !== savedHtml);
-  saveState.textContent = dirty ? "未保存" : "保存済み";
 }
 
 /* Undo/Redo */
@@ -862,39 +863,13 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter 安定化（根治）----
-   Androidは keydown止めても beforeinputで insertParagraph が走ることがある。
-   → beforeinputで止めて、必ず自前処理にする。
-*/
-function makePlainLine(text){
-  const div = document.createElement("div");
-  div.className = "plainline";
-  div.textContent = (text && text.length) ? text : ZWSP;
-  return div;
-}
-function setCaretToStart(el){
-  const sel = window.getSelection();
-  const r = document.createRange();
-  r.selectNodeContents(el);
-  r.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(r);
-}
-function setCaretToEnd(el){
-  const sel = window.getSelection();
-  const r = document.createRange();
-  r.selectNodeContents(el);
-  r.collapse(false);
-  sel.removeAllRanges();
-  sel.addRange(r);
-}
+/* ---- Enter 根治 ---- */
 function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
   const range = sel.getRangeAt(0);
   if (!el.contains(range.startContainer)) return null;
 
-  // el内の先頭からの文字数を数える
   const pre = range.cloneRange();
   pre.selectNodeContents(el);
   pre.setEnd(range.startContainer, range.startOffset);
@@ -909,8 +884,6 @@ function handleEnterInsideCbline(){
   const range = sel.getRangeAt(0);
   let node = range.startContainer;
   if (!node) return false;
-
-  // text node -> element
   if (node.nodeType === 3) node = node.parentNode;
 
   const cbline = node?.closest?.(".cbline");
@@ -919,7 +892,6 @@ function handleEnterInsideCbline(){
   const cbtext = cbline.querySelector(".cbtext");
   pushUndoSnapshot();
 
-  // cbtext が無いケースは保険で「次の行へ逃がす」
   if (!cbtext){
     const pl = makePlainLine("");
     cbline.after(pl);
@@ -930,15 +902,9 @@ function handleEnterInsideCbline(){
     return true;
   }
 
-  // どこでEnterしても「cblineを分割」できるようにする
-  // caret取得が怪しい端末は「末尾扱い」で良い
   const full = cbtext.textContent || "";
   let caret = null;
-  try{
-    caret = getCaretOffsetInElement(cbtext);
-  }catch(_){
-    caret = null;
-  }
+  try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
   const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
 
   const left = full.slice(0, cut);
@@ -946,31 +912,27 @@ function handleEnterInsideCbline(){
 
   cbtext.textContent = left;
 
-  // ✅ cbline直後に「plainline」を作る（div/brじゃなくて必ずplainline）
+  // cbline直後に必ずplainlineを作る
   const pl = makePlainLine(right);
   cbline.after(pl);
 
-  // ✅ 次行の先頭へカーソル
   setTimeout(()=>setCaretToStart(pl),0);
 
-  // 反映
   draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
   schedulePushSnapshot();
   return true;
 }
 
-/* ★ここが本命：beforeinputで確実に止める */
+/* ★beforeinputで確実に止める */
 editor.addEventListener("beforeinput", (e)=>{
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
 
-  // Androidは Enter が insertText "\n" で来ることがある
   const looksLikeEnter =
     t === "insertParagraph" ||
     t === "insertLineBreak" ||
     (t === "insertText" && (data === "\n" || data === "\r" || data === "\r\n")) ||
-    // 変換中に改行が混ざるパターン保険
     ((t === "insertCompositionText" || t === "insertFromComposition") &&
       (data.includes("\n") || data.includes("\r")));
 
@@ -983,24 +945,21 @@ editor.addEventListener("beforeinput", (e)=>{
   }
 });
 
-/* keydownも一応止める（保険） */
+/* keydownも保険 */
 editor.addEventListener("keydown", (e)=>{
   if (e.key === "Enter"){
     const handled = handleEnterInsideCbline();
     if (handled){
       e.preventDefault();
       e.stopPropagation();
-      return;
     }
   }
 });
 
 /* input */
 editor.addEventListener("input", ()=>{
-  // 保険：Androidが勝手に空div/brを混ぜたら消す
-  // cbline直後に変な空白が入る系もここで回収
+  // Androidが勝手に空div/brを混ぜたら plainline に回収
   editor.querySelectorAll(".cbline").forEach(line=>{
-    // cblineの直後が裸の <div><br></div> になったら plainline に揃える
     const next = line.nextSibling;
     if (next && next.nodeType === 1){
       const el = next;
@@ -1202,6 +1161,7 @@ btnDeleteInEdit.addEventListener("click", ()=>{
   deleteNotes([note.id]);
   showList();
 });
+
 /* =========================
    Export/Import + ZIP + Drag + SW update + boot
    ========================= */
@@ -1237,7 +1197,6 @@ btnDoBackup.addEventListener("click", ()=>{
   setTimeout(()=> URL.revokeObjectURL(url), 800);
   toast("バックアップを書き出しました");
 });
-
 /* ---- ZIP（store） ---- */
 function crc32Table(){
   const table = new Uint32Array(256);
@@ -1610,6 +1569,11 @@ function boot(){
   history.replaceState({screen:"list"}, "");
 }
 boot();
+
+/* Export/Importモーダルからの「テキスト化」実行後も、選択モードは解除 */
+exportModalBg.addEventListener("transitionend", ()=>{
+  // noop（将来用）
+});
 
 /* SW register */
 if ("serviceWorker" in navigator) {

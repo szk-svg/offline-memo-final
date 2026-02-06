@@ -1,4 +1,4 @@
-const CACHE_NAME = "offline-memo-final-v7-1";
+const CACHE_NAME = "offline-memo-final-v7-1"; // ← 変更すると確実に更新が走る
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -22,7 +22,7 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// 「再起動しますか？」→OKの時に即切替
+// ページ側から「SKIP_WAITING」命令を受けたら即切り替え
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();

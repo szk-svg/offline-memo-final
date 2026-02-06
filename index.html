@@ -159,11 +159,12 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
     </div>
 
     <!-- 選択モードメニュー（ここに「複数削除」を復活） -->
-    <div id="topActionsSelect" class="row hidden">
-      <div class="pill" id="selCountPill">選択: 0</div>
-      <button id="btnSelDelete" class="btn danger" type="button">削除</button>
-      <button id="btnSelCancel" class="btn ghost" type="button">解除</button>
-    </div>
+   <div id="topActionsSelect" class="row hidden">
+  <div class="pill" id="selCountPill">選択: 0</div>
+  <button id="btnSelText" class="btn" type="button">テキスト化</button>
+  <button id="btnSelDelete" class="btn danger" type="button">削除</button>
+  <button id="btnSelCancel" class="btn ghost" type="button">解除</button>
+</div>
   </div>
 </div>
 
@@ -322,6 +323,7 @@ const topActionsSelect = document.getElementById("topActionsSelect");
 const selCountPill = document.getElementById("selCountPill");
 const btnSelDelete = document.getElementById("btnSelDelete");
 const btnSelCancel = document.getElementById("btnSelCancel");
+const btnSelText = document.getElementById("btnSelText");
 
 const btnNew = document.getElementById("btnNew");
 const btnExport = document.getElementById("btnExport");
@@ -452,6 +454,20 @@ btnSelDelete.addEventListener("click", ()=>{
   if (selectedIds.size === 0) return;
   deleteNotes(Array.from(selectedIds));
 });
+if (btnSelText && btnDoText){
+  btnSelText.addEventListener("click", ()=>{
+    if (selectedIds.size === 0){
+      toast("テキスト化するメモを選んでね");
+      return;
+    }
+
+    // 既存の「テキスト化 / zip」処理をそのまま使う
+    btnDoText.click();
+
+    // 実行後は選択モード解除
+    setSelectionMode(false);
+  });
+}
 
 /* UI state */
 let currentId=null;
@@ -916,14 +932,24 @@ function handleEnterInsideCbline(){
 
 /* ★ここが本命：beforeinputで確実に止める */
 editor.addEventListener("beforeinput", (e)=>{
-  const t = e.inputType;
-  if (t === "insertParagraph" || t === "insertLineBreak"){
-    // cbline内ならブラウザ挙動を止めて自前処理
-    const handled = handleEnterInsideCbline();
-    if (handled){
-      e.preventDefault();
-      e.stopPropagation();
-    }
+  const t = e.inputType || "";
+  const data = (typeof e.data === "string") ? e.data : "";
+
+  // Androidは Enter が insertText "\n" で来ることがある
+  const looksLikeEnter =
+    t === "insertParagraph" ||
+    t === "insertLineBreak" ||
+    (t === "insertText" && (data === "\n" || data === "\r" || data === "\r\n")) ||
+    // 変換中に改行が混ざるパターン保険
+    ((t === "insertCompositionText" || t === "insertFromComposition") &&
+      (data.includes("\n") || data.includes("\r")));
+
+  if (!looksLikeEnter) return;
+
+  const handled = handleEnterInsideCbline();
+  if (handled){
+    e.preventDefault();
+    e.stopPropagation();
   }
 });
 
@@ -941,6 +967,23 @@ editor.addEventListener("keydown", (e)=>{
 
 /* input */
 editor.addEventListener("input", ()=>{
+  // 保険：Androidが勝手に空div/brを混ぜたら消す
+  // cbline直後に変な空白が入る系もここで回収
+  editor.querySelectorAll(".cbline").forEach(line=>{
+    // cblineの直後が裸の <div><br></div> になったら plainline に揃える
+    const next = line.nextSibling;
+    if (next && next.nodeType === 1){
+      const el = next;
+      if (el.tagName === "DIV" && !el.classList.contains("plainline") && !el.classList.contains("cbline")){
+        const html = (el.innerHTML || "").toLowerCase().replace(/\s/g,"");
+        if (html === "<br>" || html === "<br/>" || html === ""){
+          const pl = makePlainLine("");
+          el.replaceWith(pl);
+        }
+      }
+    }
+  });
+
   draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
   schedulePushSnapshot();

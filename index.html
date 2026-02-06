@@ -853,25 +853,41 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter 根治 + Backspace/Deleteでチェック解除（Gboard対応）---- */
-function getCaretOffsetInElement(el){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return null;
-  const range = sel.getRangeAt(0);
-  if (!el.contains(range.startContainer)) return null;
+/* ---- Enter 根治 + Backspace/Deleteでチェック解除（Gboard強め対応） ---- */
 
-  const pre = range.cloneRange();
-  pre.selectNodeContents(el);
-  pre.setEnd(range.startContainer, range.startOffset);
-  return pre.toString().length;
+// 文字列長ベースはZWSPでズレやすいので、Rangeで「行頭/行末」を判定する
+function isCaretAtStartOf(el){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  const r = sel.getRangeAt(0);
+  if (!sel.isCollapsed) return false;
+  if (!el.contains(r.startContainer)) return false;
+
+  const head = document.createRange();
+  head.selectNodeContents(el);
+  head.collapse(true);
+
+  // r が head と同じ位置なら「行頭」
+  return r.compareBoundaryPoints(Range.START_TO_START, head) === 0;
+}
+
+function getCbText(cbline){
+  return cbline.querySelector(".cbtext");
 }
 
 function cblineToPlainline(cbline){
-  const cbtext = cbline.querySelector(".cbtext");
-  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
-  const pl = makePlainLine(text.trim() ? text : "");
+  const cbtext = getCbText(cbline);
+  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"").trim();
+  const pl = makePlainLine(text);
   cbline.replaceWith(pl);
   setTimeout(()=>setCaretToStart(pl),0);
+}
+
+function ensurePlainLineAfter(el){
+  const next = el.nextElementSibling;
+  if (!next || !next.classList.contains("plainline")){
+    el.after(makePlainLine(""));
+  }
 }
 
 function handleEnterInsideCbline(){
@@ -887,12 +903,13 @@ function handleEnterInsideCbline(){
   const cbline = node?.closest?.(".cbline");
   if (!cbline) return false;
 
-  const cbtext = cbline.querySelector(".cbtext");
+  const cbtext = getCbText(cbline);
   pushUndoSnapshot();
 
+  // cbtextが取れないなら、とにかく次に通常行を作って逃がす
   if (!cbtext){
-    const pl = makePlainLine("");
-    cbline.after(pl);
+    ensurePlainLineAfter(cbline);
+    const pl = cbline.nextElementSibling;
     setTimeout(()=>setCaretToStart(pl),0);
     draftHtml = cleanHtml(editor.innerHTML);
     updateDirtyFlag();
@@ -900,13 +917,8 @@ function handleEnterInsideCbline(){
     return true;
   }
 
-  const full = cbtext.textContent || "";
-  let caret = null;
-  try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
-  const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
-
-  // ✅ 先頭Enter：空のcbline（☐だけ）を作らず、上に空行を作る
-  if (cut === 0){
+  // 行頭Enter：空のcblineを作らない。上に空行を作る
+  if (isCaretAtStartOf(cbtext)){
     const plUp = makePlainLine("");
     cbline.before(plUp);
     setTimeout(()=>setCaretToStart(plUp),0);
@@ -916,13 +928,29 @@ function handleEnterInsideCbline(){
     return true;
   }
 
+  // それ以外：左右に分割して下をplainlineへ
+  const full = cbtext.textContent || "";
+
+  // caretの文字オフセット（ZWSPが混ざるとズレるので、最悪「末尾扱い」）
+  let cut = full.length;
+  try{
+    // 現在選択位置の「cbtext内の見かけ文字数」を作る
+    const sel2 = window.getSelection();
+    const r2 = sel2.getRangeAt(0);
+    const pre = r2.cloneRange();
+    pre.selectNodeContents(cbtext);
+    pre.setEnd(r2.startContainer, r2.startOffset);
+    cut = Math.max(0, Math.min(pre.toString().replaceAll(ZWSP,"").length, full.length));
+  }catch(_){}
+
   const left = full.slice(0, cut);
   const right = full.slice(cut);
 
   cbtext.textContent = left;
 
-  const pl = makePlainLine(right);
+  const pl = makePlainLine(right.trim() ? right : "");
   cbline.after(pl);
+  ensurePlainLineAfter(pl); // Androidが変な挿入しても最低限の形を固定
 
   setTimeout(()=>setCaretToStart(pl),0);
 
@@ -932,76 +960,27 @@ function handleEnterInsideCbline(){
   return true;
 }
 
-function handleBackspaceDeleteOnCbline(key){
+// 1) cbline上：先頭Backspace/Delete → チェック解除
+function handleDeleteOnCbline(key){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
   if (!sel.isCollapsed) return false;
 
-  const range = sel.getRangeAt(0);
-  let node = range.startContainer;
+  const r = sel.getRangeAt(0);
+  let node = r.startContainer;
   if (!node) return false;
   if (node.nodeType === 3) node = node.parentNode;
 
   const cbline = node?.closest?.(".cbline");
   if (!cbline) return false;
 
-  const cbtext = cbline.querySelector(".cbtext");
+  const cbtext = getCbText(cbline);
   if (!cbtext) return false;
 
-  let caret = null;
-  try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
-  const atStart = (caret == null) ? true : (caret === 0);
-
-  // ✅ cbtext先頭で Backspace/Delete → チェック解除して通常行へ
-  if (atStart && (key === "Backspace" || key === "Delete")){
-    pushUndoSnapshot();
-    cblineToPlainline(cbline);
-    draftHtml = cleanHtml(editor.innerHTML);
-    updateDirtyFlag();
-    schedulePushSnapshot();
-    return true;
-  }
-  return false;
-}
-
-// ✅ 追加：チェック化直後は「空のplainline先頭」にカーソルがいる → そこで削除したら直前cblineを解除
-function handleBackspaceAtStartOfPlainline(key){
-  if (key !== "Backspace" && key !== "Delete") return false;
-
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return false;
-  if (!sel.isCollapsed) return false;
-
-  const range = sel.getRangeAt(0);
-  let node = range.startContainer;
-  if (!node) return false;
-  if (node.nodeType === 3) node = node.parentNode;
-
-  const pl = node?.closest?.(".plainline");
-  if (!pl) return false;
-
-  let caret = null;
-  try{ caret = getCaretOffsetInElement(pl); }catch(_){ caret = null; }
-  if (caret != null && caret !== 0) return false;
-
-  const prev = pl.previousElementSibling;
-  if (!prev || !prev.classList.contains("cbline")) return false;
+  if (!isCaretAtStartOf(cbtext)) return false;
 
   pushUndoSnapshot();
-
-  // cbline → plainline
-  const cbtext = prev.querySelector(".cbtext");
-  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
-  const newPl = makePlainLine(text.trim() ? text : "");
-  prev.replaceWith(newPl);
-
-  // 現在の空行(pl)が空なら消す（空白増殖防止）
-  const plText = (pl.textContent || "").replaceAll(ZWSP,"").trim();
-  if (!plText){
-    pl.remove();
-  }
-
-  setTimeout(()=>setCaretToStart(newPl), 0);
+  cblineToPlainline(cbline);
 
   draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
@@ -1009,36 +988,79 @@ function handleBackspaceAtStartOfPlainline(key){
   return true;
 }
 
-/* ★beforeinput：Enterも削除もここで確実に止める（Gboardの本命） */
+// 2) チェック化直後に起きるやつ：空plainline行頭Backspace → 直前cblineを解除して、空行は消す
+function handleBackspaceAtStartOfEmptyPlainline(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  if (!sel.isCollapsed) return false;
+
+  const r = sel.getRangeAt(0);
+  let node = r.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
+
+  const pl = node?.closest?.(".plainline");
+  if (!pl) return false;
+
+  // 行頭じゃないなら無視
+  if (!isCaretAtStartOf(pl)) return false;
+
+  // 空行じゃないなら無視
+  const plText = (pl.textContent || "").replaceAll(ZWSP,"").trim();
+  if (plText) return false;
+
+  const prev = pl.previousElementSibling;
+  if (!prev || !prev.classList.contains("cbline")) return false;
+
+  pushUndoSnapshot();
+
+  // 直前cblineをplainline化
+  cblineToPlainline(prev);
+
+  // いまの空行は消す（空白増殖防止）
+  pl.remove();
+
+  draftHtml = cleanHtml(editor.innerHTML);
+  updateDirtyFlag();
+  schedulePushSnapshot();
+  return true;
+}
+
+/* ★beforeinput：Gboardは削除がここで来ることが多い */
 editor.addEventListener("beforeinput", (e)=>{
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
 
+  // Enter系（Gboard/Androidで揺れるので広めに拾う）
   const looksLikeEnter =
     t === "insertParagraph" ||
     t === "insertLineBreak" ||
-    (t === "insertText" && (data === "\n" || data === "\r" || data === "\r\n")) ||
-    ((t === "insertCompositionText" || t === "insertFromComposition") &&
-      (data.includes("\n") || data.includes("\r")));
+    (t === "insertText" && (data.includes("\n") || data.includes("\r"))) ||
+    (t.startsWith("insert") && (data.includes("\n") || data.includes("\r")));
 
   if (looksLikeEnter){
-    if (handleEnterInsideCbline()){
+    const handled = handleEnterInsideCbline();
+    if (handled && e.cancelable){
       e.preventDefault();
       e.stopPropagation();
     }
     return;
   }
 
-  // 削除系：Gboardはこっちで来ることが多い
-  if (t === "deleteContentBackward"){
-    if (handleBackspaceDeleteOnCbline("Backspace") || handleBackspaceAtStartOfPlainline("Backspace")){
-      e.preventDefault();
-      e.stopPropagation();
-    }
-    return;
-  }
-  if (t === "deleteContentForward"){
-    if (handleBackspaceDeleteOnCbline("Delete") || handleBackspaceAtStartOfPlainline("Delete")){
+  // 削除系：deleteContentBackward 以外も来る（Gboard）
+  const isDelete =
+    t.startsWith("delete") ||
+    t === "deleteWordBackward" ||
+    t === "deleteWordForward" ||
+    t === "deleteSoftLineBackward" ||
+    t === "deleteSoftLineForward" ||
+    t === "deleteHardLineBackward" ||
+    t === "deleteHardLineForward";
+
+  if (isDelete){
+    // priority：cbline先頭解除 → 空plainline(直後)からの解除
+    const handled = handleDeleteOnCbline("Backspace") || handleBackspaceAtStartOfEmptyPlainline();
+    if (handled && e.cancelable){
       e.preventDefault();
       e.stopPropagation();
     }
@@ -1056,7 +1078,7 @@ editor.addEventListener("keydown", (e)=>{
     }
   }
   if (e.key === "Backspace" || e.key === "Delete"){
-    if (handleBackspaceDeleteOnCbline(e.key) || handleBackspaceAtStartOfPlainline(e.key)){
+    if (handleDeleteOnCbline(e.key) || handleBackspaceAtStartOfEmptyPlainline()){
       e.preventDefault();
       e.stopPropagation();
       return;
@@ -1090,6 +1112,7 @@ elTitle.addEventListener("input", ()=>{
   updateDirtyFlag();
   schedulePushSnapshot();
 });
+
 /* color */
 function applyColor(color){
   pushUndoSnapshot();

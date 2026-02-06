@@ -50,8 +50,9 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 .rowCompact{
   display:flex;align-items:center;gap:10px;
   padding:10px 12px;border:1px solid var(--line);
-  border-radius:14px;background:#fff
+  border-radius:14px;background:#fff;
 }
+.rowCompact.selected{outline:2px solid rgba(0,0,0,.18)}
 .rowLeft{flex:1;min-width:0}
 .rowTitle{font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rowMeta{font-size:12px;color:var(--muted);margin-top:2px;font-weight:800}
@@ -65,6 +66,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 }
 .miniBtn:active{background:var(--tap)}
 .miniBtn.danger{border-color:#f2c0c0;color:var(--danger)}
+.miniBtn.on{border-color:#111}
 
 .hidden{display:none!important}
 
@@ -95,23 +97,15 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 .tool.active{border-color:var(--accent)}
 .hint{margin-left:auto}
 
-/* checkbox in memo */
+/* checkbox */
 .cbline{display:flex;gap:10px;margin:6px 0;align-items:flex-start}
 .cbox{
   width:24px;height:24px;border:1px solid #bbb;border-radius:6px;
   display:grid;place-items:center;font-weight:900;flex:0 0 24px;
   user-select:none;-webkit-user-select:none;
 }
-.cbtext{flex:1;word-break:break-word}
+.cbtext{flex:1;word-break:break-word;min-width:0}
 .cbline.done .cbtext{color:#777;text-decoration:line-through}
-
-/* selection mode */
-.selBox{
-  width:22px;height:22px;border:1px solid #bbb;border-radius:6px;
-  display:grid;place-items:center;font-weight:900;flex:0 0 22px;
-  user-select:none;-webkit-user-select:none;
-}
-.selBox.on{border-color:#111}
 
 /* toast */
 .toast{
@@ -122,34 +116,45 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 }
 .toast.show{opacity:1}
 
-/* drag */
-.dragging{opacity:.6}
+/* modal */
+.modalBack{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);
+  display:none;align-items:flex-end;justify-content:center;z-index:1000;
+}
+.modalBack.show{display:flex}
+.modal{
+  width:min(720px,100%);
+  background:#fff;border-radius:18px 18px 0 0;
+  border:1px solid var(--line);
+  box-shadow:0 -10px 30px rgba(0,0,0,.18);
+  padding:14px;
+}
+.modalTitle{font-weight:900;font-size:16px;margin:2px 0 10px}
+.modalBtns{display:flex;gap:10px;flex-wrap:wrap}
+.modalBtns .btn{flex:1}
+.modalList{
+  margin-top:10px;border-top:1px solid var(--line);padding-top:10px;
+  max-height:48vh;overflow:auto;
+}
+.pickRow{display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line)}
+.pickRow:last-child{border-bottom:none}
+.pickRow .t{font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pickRow .m{font-size:12px;color:var(--muted);font-weight:800}
+.pickRow .col{min-width:0;flex:1}
+.small{font-size:12px;color:var(--muted);font-weight:800;margin-top:8px}
+
+/* drag feedback */
+.dragging{opacity:.55}
 .ghost{
   outline:2px dashed rgba(0,0,0,.25);
   border-radius:12px;height:56px;
 }
-
-/* modal */
-.modalBackdrop{
-  position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;
-  display:none;align-items:center;justify-content:center;padding:16px;
+.dragHint{
+  position:fixed;left:50%;top:12px;transform:translateX(-50%);
+  background:rgba(0,0,0,.85);color:#fff;padding:8px 12px;border-radius:999px;
+  font-weight:900;font-size:12px;z-index:1200;display:none;
 }
-.modalBackdrop.show{display:flex}
-.modal{
-  width:min(680px, 100%);
-  background:#fff;border:1px solid var(--line);border-radius:16px;
-  box-shadow:var(--shadow);padding:14px;
-}
-.modalTitle{font-weight:900;font-size:16px;margin:2px 0 10px}
-.modalBody{max-height:min(70vh, 520px);overflow:auto;border-top:1px solid var(--line);padding-top:10px}
-.modalActions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
-.notePickRow{
-  display:flex;align-items:center;gap:10px;
-  padding:10px 10px;border:1px solid var(--line);
-  border-radius:14px;background:#fff;margin-bottom:8px;
-}
-.notePickTitle{font-weight:900;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.notePickMeta{color:var(--muted);font-size:12px;font-weight:800}
+.dragHint.show{display:block}
 </style>
 </head>
 
@@ -158,9 +163,9 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   <div class="brand">
     <h1>offline-memo-final</h1>
     <div class="row">
+      <button id="btnSelect" class="btn ghost" type="button">選択</button>
       <button id="btnExport" class="btn ghost" type="button">Export</button>
       <button id="btnImport" class="btn ghost" type="button">Import</button>
-      <button id="btnSelect" class="btn ghost" type="button">選択</button>
       <button id="btnNew" class="btn" type="button">新規</button>
     </div>
   </div>
@@ -180,17 +185,16 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 
     <input id="elSearch" class="search" placeholder="検索（タイトル・本文）">
 
-    <div id="selectHint" class="muted" style="margin-top:10px">
+    <div class="muted" style="margin-top:10px">
       基本：更新順 / ★固定内も更新順内も ≡長押しで並び替え
     </div>
 
-    <div id="selectBar" class="row hidden" style="margin-top:10px;flex-wrap:wrap">
-      <div class="pill" id="selCountPill">0件選択</div>
+    <div id="bulkBar" class="row hidden" style="margin-top:10px;gap:8px">
+      <div class="pill" id="bulkCount">0件選択</div>
       <div class="spacer"></div>
-      <button id="btnSelAll" class="btn ghost" type="button">全選択</button>
-      <button id="btnSelClear" class="btn ghost" type="button">解除</button>
-      <button id="btnSelDelete" class="btn danger" type="button">選択削除</button>
-      <button id="btnSelCancel" class="btn" type="button">完了</button>
+      <button id="btnBulkTxt" class="btn ghost" type="button">選択メモをtxt</button>
+      <button id="btnBulkDel" class="btn danger" type="button">選択削除</button>
+      <button id="btnBulkCancel" class="btn" type="button">解除</button>
     </div>
 
     <div id="notesEl" class="list"></div>
@@ -232,25 +236,32 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 <input id="fileImport" type="file" class="hidden" accept=".json,.txt,application/json,text/plain" multiple>
 <div id="toast" class="toast">OK</div>
 
-<!-- modal -->
-<div id="modalBackdrop" class="modalBackdrop" aria-hidden="true">
-  <div class="modal" role="dialog" aria-modal="true">
-    <div id="modalTitle" class="modalTitle">タイトル</div>
-    <div id="modalBody" class="modalBody"></div>
-    <div id="modalActions" class="modalActions"></div>
+<!-- Modal -->
+<div id="modalBack" class="modalBack">
+  <div class="modal">
+    <div id="modalTitle" class="modalTitle">Export</div>
+    <div id="modalBtns" class="modalBtns"></div>
+    <div id="modalBody" class="modalList hidden"></div>
+    <div id="modalFoot" class="small"></div>
   </div>
 </div>
 
+<div id="dragHint" class="dragHint">ドラッグで並び替え</div>
+
 <script>
 /* =========================
-   offline-memo-final v7 + PWA cache v8
-   追加:
-   - 選択モード(複数削除)
-   - Export: バックアップ(json) / テキスト化(txt, 複数選択→個別txt)
-   - Import: txt 複数→それぞれメモ化 / json は置換
-   ========================= */
+ offline-memo-final v7+
+ - ★固定：pinnedIds（ドラッグで並び替え）
+ - 更新順：normalOrderIds（ドラッグで並び替え）
+ - 保存(更新)で通常メモは更新順先頭へ
+ - 複数選択/複数削除/選択txtエクスポート/複数txtインポート
+ - Enter/Deleteのcbline崩れ対策
+ - SW更新通知 + 再起動ボタン
+ - 検索/描画の軽量化（インメモリindex）
+ ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
+
 /* utils */
 function nowTs(){ return Date.now(); }
 function pad2(n){ return String(n).padStart(2,"0"); }
@@ -276,34 +287,15 @@ function stripTags(html){
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
-
-/* html -> text (txt export) */
-function htmlToText(html){
-  const root = document.createElement("div");
-  root.innerHTML = html || "";
-
-  // checkbox line -> "[ ] text" / "[x] text"
-  root.querySelectorAll(".cbline").forEach(line=>{
-    const done = line.getAttribute("data-done") === "true";
-    const text = (line.querySelector(".cbtext")?.textContent || line.textContent || "").trim();
-    const rep = document.createTextNode(`${done ? "[x]" : "[ ]"} ${text}\n`);
-    line.replaceWith(rep);
-  });
-
-  // <br> -> \n
-  root.querySelectorAll("br").forEach(br=> br.replaceWith(document.createTextNode("\n")));
-
-  // block end -> \n
-  const blocks = root.querySelectorAll("div,p,li");
-  blocks.forEach(b=>{
-    if (b.childNodes.length === 0) return;
-    b.appendChild(document.createTextNode("\n"));
-  });
-
-  let t = root.textContent || "";
-  // normalize
-  t = t.replace(/\n{3,}/g, "\n\n").replace(/[ \t]+\n/g, "\n").trim();
-  return t;
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1200);
 }
 
 /* toast */
@@ -317,67 +309,62 @@ function toast(msg){
 }
 
 /* modal */
-const modalBackdrop = document.getElementById("modalBackdrop");
+const modalBack = document.getElementById("modalBack");
 const modalTitle = document.getElementById("modalTitle");
-const modalBody = document.getElementById("modalBody");
-const modalActions = document.getElementById("modalActions");
-
+const modalBtns  = document.getElementById("modalBtns");
+const modalBody  = document.getElementById("modalBody");
+const modalFoot  = document.getElementById("modalFoot");
 function closeModal(){
-  modalBackdrop.classList.remove("show");
-  modalBackdrop.setAttribute("aria-hidden","true");
-  modalTitle.textContent = "";
+  modalBack.classList.remove("show");
+  modalBtns.innerHTML = "";
   modalBody.innerHTML = "";
-  modalActions.innerHTML = "";
+  modalBody.classList.add("hidden");
+  modalFoot.textContent = "";
 }
-function openModal({title, bodyEl, actions}){
-  modalTitle.textContent = title || "";
-  modalBody.innerHTML = "";
-  if (bodyEl) modalBody.appendChild(bodyEl);
-  modalActions.innerHTML = "";
-  (actions||[]).forEach(btn=> modalActions.appendChild(btn));
-  modalBackdrop.classList.add("show");
-  modalBackdrop.setAttribute("aria-hidden","false");
-}
-modalBackdrop.addEventListener("click",(e)=>{
-  if (e.target === modalBackdrop) closeModal();
+modalBack.addEventListener("click", (e)=>{
+  if (e.target === modalBack) closeModal();
 });
+function showModal(title){
+  modalTitle.textContent = title;
+  modalBack.classList.add("show");
+}
 
 /* DOM refs */
 const screenList = document.getElementById("screenList");
 const screenEdit = document.getElementById("screenEdit");
-const bottomBar = document.getElementById("bottomBar");
+const bottomBar  = document.getElementById("bottomBar");
 
-const btnNew = document.getElementById("btnNew");
+const btnNew    = document.getElementById("btnNew");
 const btnExport = document.getElementById("btnExport");
 const btnImport = document.getElementById("btnImport");
 const btnSelect = document.getElementById("btnSelect");
-const fileImport = document.getElementById("fileImport");
+const fileImport= document.getElementById("fileImport");
 
 const countPill = document.getElementById("countPill");
-const elSearch = document.getElementById("elSearch");
-const notesEl = document.getElementById("notesEl");
+const elSearch  = document.getElementById("elSearch");
+const notesEl   = document.getElementById("notesEl");
 
-const selectHint = document.getElementById("selectHint");
-const selectBar = document.getElementById("selectBar");
-const selCountPill = document.getElementById("selCountPill");
-const btnSelAll = document.getElementById("btnSelAll");
-const btnSelClear = document.getElementById("btnSelClear");
-const btnSelDelete = document.getElementById("btnSelDelete");
-const btnSelCancel = document.getElementById("btnSelCancel");
+const bulkBar   = document.getElementById("bulkBar");
+const bulkCount = document.getElementById("bulkCount");
+const btnBulkDel= document.getElementById("btnBulkDel");
+const btnBulkTxt= document.getElementById("btnBulkTxt");
+const btnBulkCancel = document.getElementById("btnBulkCancel");
 
-const btnBack = document.getElementById("btnBack");
-const btnSave = document.getElementById("btnSave");
+const btnBack   = document.getElementById("btnBack");
+const btnSave   = document.getElementById("btnSave");
 const btnDeleteInEdit = document.getElementById("btnDeleteInEdit");
-const btnUndo = document.getElementById("btnUndo");
-const btnRedo = document.getElementById("btnRedo");
+const btnUndo   = document.getElementById("btnUndo");
+const btnRedo   = document.getElementById("btnRedo");
 
-const elTitle = document.getElementById("elTitle");
-const viewer = document.getElementById("viewer");
-const editor = document.getElementById("editor");
+const elTitle   = document.getElementById("elTitle");
+const viewer    = document.getElementById("viewer");
+const editor    = document.getElementById("editor");
 const saveState = document.getElementById("saveState");
-const btnBlack = document.getElementById("btnBlack");
-const btnRed = document.getElementById("btnRed");
-const btnCb = document.getElementById("btnCb");
+const btnBlack  = document.getElementById("btnBlack");
+const btnRed    = document.getElementById("btnRed");
+const btnCb     = document.getElementById("btnCb");
+
+const dragHint  = document.getElementById("dragHint");
 
 /* store */
 function normalizeStore(s){
@@ -399,14 +386,12 @@ function normalizeStore(s){
   s.pinnedIds = s.pinnedIds.filter(id=>set.has(id));
   s.normalOrderIds = s.normalOrderIds.filter(id=>set.has(id) && !s.pinnedIds.includes(id));
 
-  // normalOrderIds が空なら、更新順で初期化
   if (s.normalOrderIds.length === 0){
     s.normalOrderIds = s.notes
       .filter(n=>!s.pinnedIds.includes(n.id))
       .sort((a,b)=>b.updatedAt-a.updatedAt)
       .map(n=>n.id);
   }
-
   return s;
 }
 function loadStore(){
@@ -418,9 +403,7 @@ function saveStore(){
 }
 let store = loadStore();
 
-function getNote(id){
-  return store.notes.find(n=>n.id===id) || null;
-}
+function getNote(id){ return store.notes.find(n=>n.id===id) || null; }
 function ensureAtLeastOne(){
   if (store.notes.length) return;
   const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
@@ -428,8 +411,8 @@ function ensureAtLeastOne(){
   store.normalOrderIds = [n.id];
   saveStore();
 }
-function isPinned(id){ return store.pinnedIds.includes(id); }
 
+function isPinned(id){ return store.pinnedIds.includes(id); }
 function pinToggle(id){
   if (isPinned(id)){
     store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
@@ -442,6 +425,22 @@ function pinToggle(id){
   }
 }
 
+/* performance: search index (RAM) */
+let searchIndex = new Map(); // id -> lowerText
+function rebuildSearchIndex(){
+  searchIndex.clear();
+  for (const n of store.notes){
+    const t = (n.title||"").toLowerCase();
+    const b = stripTags(n.bodyHtml||"").toLowerCase();
+    searchIndex.set(n.id, t + "\n" + b);
+  }
+}
+function updateOneIndex(note){
+  const t = (note.title||"").toLowerCase();
+  const b = stripTags(note.bodyHtml||"").toLowerCase();
+  searchIndex.set(note.id, t + "\n" + b);
+}
+
 /* UI state */
 let currentId=null;
 let isEditing=false;
@@ -450,51 +449,69 @@ let dirty=false;
 let savedTitle="", savedHtml="";
 let draftTitle="", draftHtml="";
 
-/* selection mode */
-let selectionMode = false;
+/* bulk select */
+let selecting=false;
 let selectedIds = new Set();
+function setSelecting(on){
+  selecting = on;
+  selectedIds.clear();
+  bulkBar.classList.toggle("hidden", !selecting);
+  btnSelect.classList.toggle("primary", selecting);
+  btnSelect.textContent = selecting ? "選択中" : "選択";
+  updateBulkCount();
+  renderList(); // reflect checkbox UI
+}
+function updateBulkCount(){
+  bulkCount.textContent = `${selectedIds.size}件選択`;
+  btnBulkDel.disabled = selectedIds.size===0;
+  btnBulkTxt.disabled = selectedIds.size===0;
+}
+btnSelect.addEventListener("click", ()=> setSelecting(!selecting));
+btnBulkCancel.addEventListener("click", ()=> setSelecting(false));
 
-function setSelectionMode(on){
-  selectionMode = !!on;
-  selectedIds = new Set();
-  btnSelect.textContent = selectionMode ? "選択中" : "選択";
-  btnSelect.classList.toggle("primary", selectionMode);
-  selectBar.classList.toggle("hidden", !selectionMode);
-  selectHint.classList.toggle("hidden", selectionMode);
-  updateSelectionUI();
-  renderList();
-}
-function updateSelectionUI(){
-  selCountPill.textContent = `${selectedIds.size}件選択`;
-  btnSelDelete.disabled = selectedIds.size === 0;
-}
+btnBulkDel.addEventListener("click", ()=>{
+  if (selectedIds.size===0) return;
+  if (!confirm(`選択した${selectedIds.size}件を削除しますか？`)) return;
+
+  const del = new Set(selectedIds);
+  store.notes = store.notes.filter(n=>!del.has(n.id));
+  store.pinnedIds = store.pinnedIds.filter(id=>!del.has(id));
+  store.normalOrderIds = store.normalOrderIds.filter(id=>!del.has(id));
+
+  ensureAtLeastOne();
+  saveStore();
+  rebuildSearchIndex();
+  toast("削除しました");
+  setSelecting(false);
+});
+
+btnBulkTxt.addEventListener("click", async ()=>{
+  if (selectedIds.size===0) return;
+  await exportSelectedAsTxt(Array.from(selectedIds));
+});
 
 /* dirty + screens */
 function updateDirtyFlag(){
   dirty = (draftTitle !== savedTitle) || (draftHtml !== savedHtml);
   saveState.textContent = dirty ? "未保存" : "保存済み";
 }
-
 function showList(){
   screenEdit.classList.add("hidden");
   bottomBar.classList.add("hidden");
   screenList.classList.remove("hidden");
-
   currentId = null;
   isEditing = false;
   dirty = false;
-
   renderList();
   history.replaceState({screen:"list"}, "");
 }
-
 function setMode(edit){
   isEditing = edit;
   if (edit){
     viewer.classList.add("hidden");
     editor.classList.remove("hidden");
     editor.innerHTML = draftHtml;
-    normalizeCbLines(editor);
+    fixCbDom(editor);
     editor.focus();
   }else{
     editor.classList.add("hidden");
@@ -503,6 +520,8 @@ function setMode(edit){
     normalizeCbLines(viewer);
   }
 }
+
+/* section label */
 function addHeading(text){
   const lab = document.createElement("div");
   lab.className = "sectionLabel";
@@ -517,17 +536,13 @@ function buildList(){
   const byId = new Map(notes.map(n=>[n.id,n]));
 
   let pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
-  let normalIds = store.normalOrderIds.slice();
-
-  normalIds = normalIds.filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
+  let normalIds = store.normalOrderIds.slice().filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
   let normal = normalIds.map(id=>byId.get(id)).filter(Boolean);
 
-  // 検索時：表示上だけ更新順（ドラッグ＆選択は一応可、でも混乱するので選択は許可しつつドラッグ無効）
   if (q){
     const filtered = notes.filter(n=>{
-      const t = (n.title||"").toLowerCase();
-      const b = stripTags(n.bodyHtml||"").toLowerCase();
-      return t.includes(q) || b.includes(q);
+      const idx = searchIndex.get(n.id) || "";
+      return idx.includes(q);
     });
     const filteredSet = new Set(filtered.map(n=>n.id));
     pinned = pinned.filter(n=>filteredSet.has(n.id));
@@ -536,7 +551,6 @@ function buildList(){
       .sort((a,b)=>b.updatedAt-a.updatedAt);
     return { pinned, normal, searching:true };
   }
-
   return { pinned, normal, searching:false };
 }
 
@@ -545,14 +559,6 @@ function renderRow(note, searching){
   const row = document.createElement("div");
   row.className = "rowCompact";
   row.dataset.id = note.id;
-
-  // selection checkbox
-  let sel = null;
-  if (selectionMode){
-    sel = document.createElement("div");
-    sel.className = "selBox" + (selectedIds.has(note.id) ? " on" : "");
-    sel.textContent = selectedIds.has(note.id) ? "✓" : "";
-  }
 
   const left = document.createElement("div");
   left.className = "rowLeft";
@@ -587,25 +593,34 @@ function renderRow(note, searching){
   delBtn.type="button";
   delBtn.textContent = "🗑";
 
-  actions.append(dragBtn, starBtn, delBtn);
+  const selBtn = document.createElement("button");
+  selBtn.className = "miniBtn";
+  selBtn.type="button";
+  selBtn.textContent = selectedIds.has(note.id) ? "✓" : "◻";
+  selBtn.title = "選択";
+  selBtn.classList.toggle("on", selectedIds.has(note.id));
+  selBtn.classList.toggle("hidden", !selecting);
 
-  if (selectionMode) row.append(sel, left, actions);
-  else row.append(left, actions);
+  actions.append(selBtn, dragBtn, starBtn, delBtn);
+  row.append(left, actions);
+
+  row.classList.toggle("selected", selectedIds.has(note.id));
 
   row.addEventListener("click", ()=>{
-    if (selectionMode){
-      if (selectedIds.has(note.id)) selectedIds.delete(note.id);
-      else selectedIds.add(note.id);
-      updateSelectionUI();
-      renderList(); // sel描画更新
+    if (selecting){
+      toggleSelected(note.id);
       return;
     }
     openNote(note.id);
   });
 
+  selBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    toggleSelected(note.id);
+  });
+
   starBtn.addEventListener("click", (e)=>{
     e.stopPropagation();
-    if (selectionMode) return;
     pinToggle(note.id);
     saveStore();
     renderList();
@@ -614,25 +629,30 @@ function renderRow(note, searching){
 
   delBtn.addEventListener("click", (e)=>{
     e.stopPropagation();
-    if (selectionMode) return;
     if (!confirm("削除しますか？")) return;
     store.notes = store.notes.filter(n=>n.id!==note.id);
     store.pinnedIds = store.pinnedIds.filter(x=>x!==note.id);
     store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
     ensureAtLeastOne();
     saveStore();
+    rebuildSearchIndex();
     renderList();
     toast("削除しました");
   });
 
-  // ドラッグ（検索中 or 選択中は無効）
-  if (!searching && !selectionMode){
+  if (!searching && !selecting){
     attachManualDrag(dragBtn, row, note);
   }else{
     dragBtn.style.opacity = "0.35";
   }
 
   return row;
+}
+function toggleSelected(id){
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  updateBulkCount();
+  renderList();
 }
 
 /* render */
@@ -641,21 +661,29 @@ function renderList(){
   notesEl.innerHTML = "";
 
   const { pinned, normal, searching } = buildList();
+  const frag = document.createDocumentFragment();
 
   if (pinned.length){
-    addHeading("★ 固定");
-    pinned.forEach(n=> notesEl.appendChild(renderRow(n, searching)));
+    const lab = document.createElement("div");
+    lab.className="sectionLabel"; lab.textContent="★ 固定";
+    frag.appendChild(lab);
+    pinned.forEach(n=> frag.appendChild(renderRow(n, searching)));
   }
-  addHeading("更新順");
+  const lab2 = document.createElement("div");
+  lab2.className="sectionLabel"; lab2.textContent="更新順";
+  frag.appendChild(lab2);
+
   if (!normal.length){
     const m = document.createElement("div");
     m.className = "muted";
     m.style.padding = "6px 2px";
     m.textContent = searching ? "一致するメモがありません" : "メモがありません（右上の新規から作成）";
-    notesEl.appendChild(m);
+    frag.appendChild(m);
   }else{
-    normal.forEach(n=> notesEl.appendChild(renderRow(n, searching)));
+    normal.forEach(n=> frag.appendChild(renderRow(n, searching)));
   }
+
+  notesEl.appendChild(frag);
 }
 
 /* open */
@@ -673,7 +701,7 @@ function openNote(id){
   viewer.innerHTML = draftHtml;
   editor.innerHTML = draftHtml;
   normalizeCbLines(viewer);
-  normalizeCbLines(editor);
+  fixCbDom(editor);
 
   screenList.classList.add("hidden");
   screenEdit.classList.remove("hidden");
@@ -686,17 +714,22 @@ function openNote(id){
   history.pushState({screen:"edit", id: currentId}, "");
 }
 
-/* events */
-elSearch.addEventListener("input", ()=> renderList());
+/* search input debounce */
+let searchT=null;
+elSearch.addEventListener("input", ()=>{
+  clearTimeout(searchT);
+  searchT = setTimeout(()=> renderList(), 120);
+});
 
+/* new */
 btnNew.addEventListener("click", ()=>{
   const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
   store.notes.unshift(n);
-
   store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
   store.normalOrderIds.unshift(n.id);
 
   saveStore();
+  updateOneIndex(n);
   renderList();
   openNote(n.id);
   setMode(true);
@@ -712,43 +745,10 @@ btnNew.addEventListener("click", ()=>{
   resetUndoRedo();
 });
 
-/* selection UI */
-btnSelect.addEventListener("click", ()=>{
-  setSelectionMode(!selectionMode);
-});
-btnSelCancel.addEventListener("click", ()=> setSelectionMode(false));
-btnSelClear.addEventListener("click", ()=>{
-  selectedIds = new Set();
-  updateSelectionUI();
-  renderList();
-});
-btnSelAll.addEventListener("click", ()=>{
-  const { pinned, normal } = buildList();
-  const all = [...pinned, ...normal].map(n=>n.id);
-  selectedIds = new Set(all);
-  updateSelectionUI();
-  renderList();
-});
-btnSelDelete.addEventListener("click", ()=>{
-  if (selectedIds.size === 0) return;
-  if (!confirm(`選択した ${selectedIds.size} 件を削除しますか？`)) return;
-
-  const delSet = new Set(selectedIds);
-  store.notes = store.notes.filter(n=>!delSet.has(n.id));
-  store.pinnedIds = store.pinnedIds.filter(id=>!delSet.has(id));
-  store.normalOrderIds = store.normalOrderIds.filter(id=>!delSet.has(id));
-
-  ensureAtLeastOne();
-  saveStore();
-  toast("削除しました");
-  setSelectionMode(false);
-});
-
 /* =========================
-   Part: checkbox + color + undo/redo + save/back
+   checkbox + color + undo/redo + save/back
    ========================= */
 
-/* checkbox helpers */
 function normalizeCbLines(root){
   root.querySelectorAll(".cbline").forEach(line=>{
     const done = line.getAttribute("data-done") === "true";
@@ -766,6 +766,54 @@ function toggleCbLine(line){
   if (box) box.textContent = next ? "☑" : "☐";
 }
 
+/* cb DOM fix: Delete/Enterで崩れても復元 */
+function fixCbDom(root){
+  root.querySelectorAll(".cbline").forEach(line=>{
+    line.setAttribute("contenteditable","false"); // line自体は編集不可にして
+    let box = line.querySelector(".cbox");
+    let text = line.querySelector(".cbtext");
+
+    if (!box){
+      box = document.createElement("span");
+      box.className="cbox";
+      box.textContent="☐";
+      line.insertBefore(box, line.firstChild);
+    }
+    box.contentEditable="false";
+
+    if (!text){
+      text = document.createElement("span");
+      text.className="cbtext";
+      line.appendChild(text);
+    }
+    text.contentEditable="true";
+
+    // 余計なノードが line 直下にいたら cbtext に寄せる
+    const kids = Array.from(line.childNodes);
+    for (const k of kids){
+      if (k === box || k === text) continue;
+      text.appendChild(k);
+    }
+
+    // cbtext内の改行はbrに寄せる（変なDIV混入抑制）
+    text.querySelectorAll("div").forEach(d=>{
+      const br = document.createElement("br");
+      d.replaceWith(br);
+    });
+
+    // 空ならゼロ幅スペースは入れない（表示だけ空）
+  });
+
+  // contenteditableを壊さないため最後に戻す
+  root.querySelectorAll(".cbline").forEach(line=>{
+    line.removeAttribute("contenteditable");
+    const t = line.querySelector(".cbtext");
+    if (t) t.contentEditable="true";
+  });
+
+  normalizeCbLines(root);
+}
+
 /* sync draft */
 function syncDraftFromCurrent(){
   draftTitle = elTitle.value || "";
@@ -774,7 +822,7 @@ function syncDraftFromCurrent(){
   viewer.innerHTML = draftHtml;
   editor.innerHTML = draftHtml;
   normalizeCbLines(viewer);
-  normalizeCbLines(editor);
+  fixCbDom(editor);
 
   updateDirtyFlag();
 }
@@ -802,12 +850,12 @@ function pushUndoSnapshot(){
 }
 function schedulePushSnapshot(){
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(()=> pushUndoSnapshot(), 280);
+  pushTimer = setTimeout(()=> pushUndoSnapshot(), 260);
 }
 function resetUndoRedo(){
   undoStack = [];
   redoStack = [];
-  pushUndoSnapshot(); // init
+  pushUndoSnapshot();
   refreshUndoButtons();
 }
 
@@ -823,7 +871,7 @@ btnUndo.addEventListener("click", ()=>{
   viewer.innerHTML = draftHtml;
   editor.innerHTML = draftHtml;
   normalizeCbLines(viewer);
-  normalizeCbLines(editor);
+  fixCbDom(editor);
 
   updateDirtyFlag();
   refreshUndoButtons();
@@ -841,11 +889,12 @@ btnRedo.addEventListener("click", ()=>{
   viewer.innerHTML = draftHtml;
   editor.innerHTML = draftHtml;
   normalizeCbLines(viewer);
-  normalizeCbLines(editor);
+  fixCbDom(editor);
 
   updateDirtyFlag();
   refreshUndoButtons();
 });
+
 /* viewer/editor behavior */
 viewer.addEventListener("click", (e)=>{
   const box = e.target.closest && e.target.closest(".cbox");
@@ -855,7 +904,7 @@ viewer.addEventListener("click", (e)=>{
     toggleCbLine(line);
     draftHtml = viewer.innerHTML;
     editor.innerHTML = draftHtml;
-    normalizeCbLines(editor);
+    fixCbDom(editor);
     updateDirtyFlag();
     schedulePushSnapshot();
     return;
@@ -872,48 +921,120 @@ editor.addEventListener("click", (e)=>{
     draftHtml = editor.innerHTML;
     viewer.innerHTML = draftHtml;
     normalizeCbLines(viewer);
+    fixCbDom(editor);
     updateDirtyFlag();
     schedulePushSnapshot();
   }
 });
 
-/* ---- Enter fix (inside checkbox line) ---- */
-editor.addEventListener("keydown", (e)=>{
-  if (e.key !== "Enter") return;
-
+/* ---- Enter / Delete fix (checkbox line) ----
+   - “cblineの左側空白にカーソル”でも確実にcbline判定する
+   - Enterは cbline外に新規行を作り、そこへカーソル移動
+   - Backspace/Deleteでcboxが壊れないように保護
+*/
+function findCbLineFromSelection(){
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  if (!sel.isCollapsed) return;
-
+  if (!sel || sel.rangeCount === 0) return null;
   const range = sel.getRangeAt(0);
-  const node = range.startContainer;
 
-  const line = (node && node.nodeType)
-    ? (node.nodeType === 1 ? node : node.parentElement).closest?.(".cbline")
-    : null;
+  let node = range.startContainer;
 
-  if (!line) return;
+  // nodeがeditor直下（=左側空白タップ等）なら、近い子から探す
+  if (node === editor){
+    const i = Math.max(0, range.startOffset - 1);
+    const near = editor.childNodes[i] || editor.childNodes[range.startOffset] || null;
+    if (near){
+      if (near.nodeType === 1){
+        return near.closest?.(".cbline") || near.querySelector?.(".cbline") || null;
+      }else if (near.nodeType === 3){
+        return near.parentElement?.closest?.(".cbline") || null;
+      }
+    }
+    return null;
+  }
 
-  e.preventDefault();
+  if (node.nodeType === 3) node = node.parentElement;
+  if (!node) return null;
+  return node.closest?.(".cbline") || null;
+}
 
+function placeCaretInNewEmptyLineAfter(el){
+  const sel = window.getSelection();
+  if (!sel) return;
   const newLine = document.createElement("div");
   newLine.innerHTML = "<br>";
-  line.after(newLine);
+  el.after(newLine);
 
   const r2 = document.createRange();
   r2.setStart(newLine, 0);
   r2.collapse(true);
   sel.removeAllRanges();
   sel.addRange(r2);
+}
 
-  draftHtml = editor.innerHTML;
-  viewer.innerHTML = draftHtml;
-  normalizeCbLines(viewer);
-  updateDirtyFlag();
-  schedulePushSnapshot();
+editor.addEventListener("keydown", (e)=>{
+  const key = e.key;
+
+  // cbline判定（左余白タップ問題を潰す）
+  const line = findCbLineFromSelection();
+  if (!line) return;
+
+  // 選択範囲ありは通常に任せる
+  const sel = window.getSelection();
+  if (!sel || !sel.isCollapsed) return;
+
+  if (key === "Enter"){
+    e.preventDefault();
+    pushUndoSnapshot();
+
+    // cbline直後に空行作ってそこへ
+    placeCaretInNewEmptyLineAfter(line);
+
+    draftHtml = editor.innerHTML;
+    viewer.innerHTML = draftHtml;
+    normalizeCbLines(viewer);
+    fixCbDom(editor);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+    return;
+  }
+
+  if (key === "Backspace" || key === "Delete"){
+    // cbox側にカーソル行ったり崩れるのを避ける：cbtext外ならcbtext末尾へ寄せる
+    const r = sel.getRangeAt(0);
+    let n = r.startContainer;
+    if (n.nodeType === 3) n = n.parentElement;
+    const cbtext = line.querySelector(".cbtext");
+
+    if (!cbtext) return;
+
+    if (!cbtext.contains(r.startContainer)){
+      e.preventDefault();
+      const rr = document.createRange();
+      rr.selectNodeContents(cbtext);
+      rr.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(rr);
+      return;
+    }
+
+    // cbtext先頭でBackspace：cbline崩れやすい端末があるので、通常行に戻す（安全策）
+    if (key === "Backspace"){
+      const tmp = document.createElement("div");
+      tmp.appendChild(r.cloneContents());
+      const atStart = (cbtext.textContent||"").length>0 && r.startOffset===0 && r.startContainer === cbtext.firstChild;
+      if (atStart){
+        // ただし“戻す”はユーザー体験悪いので、ここは軽く抑制のみ
+        // → まず崩れを防ぐためにDOMを固定
+        fixCbDom(editor);
+      }
+    }
+  }
 });
 
 editor.addEventListener("input", ()=>{
+  // 入力で崩れたら即修正
+  fixCbDom(editor);
   draftHtml = editor.innerHTML;
   updateDirtyFlag();
   schedulePushSnapshot();
@@ -931,6 +1052,7 @@ function applyColor(color){
   editor.focus();
   try{ document.execCommand("styleWithCSS", false, true); }catch(_){}
   document.execCommand("foreColor", false, color);
+  fixCbDom(editor);
 
   draftHtml = editor.innerHTML;
   updateDirtyFlag();
@@ -975,7 +1097,6 @@ function getCurrentBlockInEditor(){
   return null;
 }
 
-/* checkboxify */
 btnCb.addEventListener("click", ()=>{
   if (!isEditing) setMode(true);
   editor.focus();
@@ -1006,6 +1127,7 @@ btnCb.addEventListener("click", ()=>{
     const span = document.createElement("span");
     span.className = "cbtext";
     span.textContent = text;
+    span.contentEditable = "true";
 
     line.appendChild(box);
     line.appendChild(span);
@@ -1042,6 +1164,7 @@ btnCb.addEventListener("click", ()=>{
     block.replaceWith(line);
   }
 
+  fixCbDom(editor);
   draftHtml = editor.innerHTML;
   viewer.innerHTML = draftHtml;
   normalizeCbLines(viewer);
@@ -1054,7 +1177,6 @@ function confirmDiscardIfDirty(){
   if (!dirty) return true;
   return confirm("更新は破棄されますがよろしいですか？");
 }
-
 function saveCurrent(){
   const note = getNote(currentId);
   if (!note) return;
@@ -1071,6 +1193,7 @@ function saveCurrent(){
   }
 
   saveStore();
+  updateOneIndex(note);
 
   savedTitle = draftTitle;
   savedHtml  = draftHtml;
@@ -1080,7 +1203,6 @@ function saveCurrent(){
   setMode(false);
   resetUndoRedo();
 }
-
 btnSave.addEventListener("click", ()=> saveCurrent());
 
 btnBack.addEventListener("click", ()=>{
@@ -1099,161 +1221,83 @@ btnDeleteInEdit.addEventListener("click", ()=>{
   store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
   ensureAtLeastOne();
   saveStore();
+  rebuildSearchIndex();
   toast("削除しました");
   showList();
 });
 
 /* =========================
-   Export / Import
-   - Export: モード選択 -> JSON / TXT(複数)
-   - Import: TXT 複数 -> それぞれメモ / JSON 置換
+   export/import + drag + boot + hardware back
    ========================= */
 
-function exportJson(){
+async function exportBackupJson(){
   if (!screenEdit.classList.contains("hidden") && dirty){
     const ok = confirm("編集中の未保存内容があります。\n保存せずにExportすると未保存分は入りません。\n続けますか？");
     if (!ok) return;
   }
-
   const payload = { version: 1, exportedAt: nowTs(), data: store };
   const json = JSON.stringify(payload, null, 2);
   const blob = new Blob([json], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `offline-memo-backup-${stampForFile()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+  downloadBlob(blob, `offline-memo-backup-${stampForFile()}.json`);
   toast("書き出しました");
 }
 
-function exportTxtPick(){
-  const { pinned, normal } = buildList();
-  const list = [...pinned, ...normal];
-
-  const wrap = document.createElement("div");
-
-  const picks = new Set();
-  list.forEach(n=>{
-    const row = document.createElement("div");
-    row.className = "notePickRow";
-
-    const box = document.createElement("div");
-    box.className = "selBox";
-    box.textContent = "";
-    const title = document.createElement("div");
-    title.className = "notePickTitle";
-    title.textContent = (n.title||"").trim() ? n.title : "（無題）";
-    const meta = document.createElement("div");
-    meta.className = "notePickMeta";
-    meta.textContent = fmt(n.updatedAt);
-
-    row.append(box, title, meta);
-
-    row.addEventListener("click", ()=>{
-      if (picks.has(n.id)){
-        picks.delete(n.id);
-        box.classList.remove("on");
-        box.textContent = "";
-      }else{
-        picks.add(n.id);
-        box.classList.add("on");
-        box.textContent = "✓";
-      }
-    });
-
-    wrap.appendChild(row);
+function htmlToTxt(bodyHtml){
+  const tmp = document.createElement("div");
+  tmp.innerHTML = bodyHtml || "";
+  // cblineをわかりやすく整形（☑/☐ + space + text）
+  tmp.querySelectorAll(".cbline").forEach(line=>{
+    const done = line.getAttribute("data-done")==="true";
+    const t = line.querySelector(".cbtext")?.textContent ?? "";
+    const rep = document.createTextNode((done?"[x] ":"[ ] ") + t);
+    line.replaceWith(rep);
   });
-
-  const btnCancel = document.createElement("button");
-  btnCancel.className = "btn ghost";
-  btnCancel.type = "button";
-  btnCancel.textContent = "キャンセル";
-  btnCancel.addEventListener("click", closeModal);
-
-  const btnAll = document.createElement("button");
-  btnAll.className = "btn ghost";
-  btnAll.type = "button";
-  btnAll.textContent = "全選択";
-  btnAll.addEventListener("click", ()=>{
-    picks.clear();
-    list.forEach(n=>picks.add(n.id));
-    wrap.querySelectorAll(".notePickRow").forEach(r=>{
-      const b = r.querySelector(".selBox");
-      b.classList.add("on"); b.textContent="✓";
-    });
-  });
-
-  const btnOk = document.createElement("button");
-  btnOk.className = "btn primary";
-  btnOk.type = "button";
-  btnOk.textContent = "TXTを書き出す";
-  btnOk.addEventListener("click", ()=>{
-    if (picks.size === 0){ toast("メモを選んでね"); return; }
-
-    const pickedNotes = list.filter(n=>picks.has(n.id));
-    pickedNotes.forEach(n=>{
-      const title = (n.title||"").trim() ? n.title.trim() : "memo";
-      const safe = title.replace(/[\\\/:*?"<>|]/g,"_").slice(0,60);
-      const body = htmlToText(n.bodyHtml || "");
-      const txt = `${title}\n\n${body}\n`;
-      const blob = new Blob([txt], {type:"text/plain"});
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${safe}-${stampForFile()}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-
-      setTimeout(()=> URL.revokeObjectURL(url), 800);
-    });
-
-    closeModal();
-    toast("TXTを書き出しました");
-  });
-
-  openModal({
-    title: "テキスト化するメモを選択",
-    bodyEl: wrap,
-    actions: [btnCancel, btnAll, btnOk]
-  });
+  // <br>を改行扱いにしたいので innerText
+  return (tmp.innerText || "").replace(/\u00a0/g," ");
 }
 
+async function exportSelectedAsTxt(ids){
+  if (!ids || ids.length===0) return;
+  // Androidは連続DLが詰まることがあるので軽く間隔
+  for (let i=0;i<ids.length;i++){
+    const n = getNote(ids[i]);
+    if (!n) continue;
+    const title = ((n.title||"").trim() ? n.title.trim() : "memos").replace(/[\\\/:*?"<>|]/g,"_");
+    const txt = htmlToTxt(n.bodyHtml);
+    const blob = new Blob([txt], {type:"text/plain"});
+    downloadBlob(blob, `${title || "memo"}-${stampForFile()}.txt`);
+    await new Promise(r=>setTimeout(r, 350));
+  }
+  toast("txtを書き出しました");
+}
+
+/* Export button -> modal (backup or txt) */
 btnExport.addEventListener("click", ()=>{
-  const body = document.createElement("div");
-  body.innerHTML = `
-    <div class="muted" style="margin-bottom:10px">Export方法を選んでね</div>
-    <div class="row" style="flex-wrap:wrap">
-      <div class="pill">バックアップ：全データをJSON</div>
-      <div class="pill">テキスト化：選んだメモを個別TXT</div>
-    </div>
-  `;
+  showModal("Export");
+  modalBtns.innerHTML = "";
 
   const b1 = document.createElement("button");
-  b1.className = "btn primary";
-  b1.type = "button";
-  b1.textContent = "バックアップ(JSON)";
-  b1.addEventListener("click", ()=>{ closeModal(); exportJson(); });
+  b1.className="btn ghost"; b1.type="button";
+  b1.textContent="バックアップ(.json)";
+  b1.onclick = async ()=>{ closeModal(); await exportBackupJson(); };
 
   const b2 = document.createElement("button");
-  b2.className = "btn";
-  b2.type = "button";
-  b2.textContent = "テキスト化(TXT)";
-  b2.addEventListener("click", ()=>{ closeModal(); exportTxtPick(); });
+  b2.className="btn ghost"; b2.type="button";
+  b2.textContent="テキスト化(.txt)";
+  b2.onclick = ()=>{
+    // 選択中ならそのまま、未選択なら選択画面へ
+    closeModal();
+    if (!selecting) setSelecting(true);
+    toast("書き出すメモを選んで「選択メモをtxt」");
+  };
 
   const b3 = document.createElement("button");
-  b3.className = "btn ghost";
-  b3.type = "button";
-  b3.textContent = "キャンセル";
-  b3.addEventListener("click", closeModal);
+  b3.className="btn"; b3.type="button";
+  b3.textContent="閉じる";
+  b3.onclick = ()=> closeModal();
 
-  openModal({ title:"Export", bodyEl: body, actions:[b3, b2, b1] });
+  modalBtns.append(b1,b2,b3);
+  modalFoot.textContent = "※ テキスト化は「選択」→複数選択→「選択メモをtxt」";
 });
 
 btnImport.addEventListener("click", ()=>{
@@ -1261,62 +1305,53 @@ btnImport.addEventListener("click", ()=>{
   fileImport.click();
 });
 
+/* Import: .jsonは置換 / .txtは複数OKで各ファイル=1メモ追加 */
 fileImport.addEventListener("change", async ()=>{
-  const files = Array.from(fileImport.files || []);
+  const files = fileImport.files ? Array.from(fileImport.files) : [];
   if (!files.length) return;
 
-  const jsonFiles = files.filter(f => (f.name||"").toLowerCase().endsWith(".json"));
-  const txtFiles  = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
-
-  // JSONが入ってたら置換優先（混在は危険なので確認）
-  if (jsonFiles.length){
-    if (files.length > 1){
-      const ok = confirm("JSONインポートは「全置換」です。\nTXTなど他のファイルも選ばれていますが、JSONのみ処理して置き換えます。\n続けますか？");
-      if (!ok) return;
-    }
+  // jsonが混ざってたら json優先（1つだけ想定）
+  const jsonFile = files.find(f => (f.name||"").toLowerCase().endsWith(".json"));
+  if (jsonFile){
     try{
-      const text = await jsonFiles[0].text();
+      const text = await jsonFile.text();
       const obj = safeParse(text, null);
       if (!obj || !obj.data) throw new Error("invalid");
       store = normalizeStore(obj.data);
       ensureAtLeastOne();
       saveStore();
+      rebuildSearchIndex();
       toast("インポートしました");
       showList();
-    }catch(_){
-      alert("インポート失敗：JSONが不正です");
+      return;
+    }catch(e){
+      alert("インポート失敗：ファイル形式が違うか壊れてます");
+      return;
     }
+  }
+
+  // txt複数
+  const txts = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
+  if (!txts.length){
+    alert("インポート失敗：.json か .txt を選んでね");
     return;
   }
 
-  // TXT複数：それぞれメモ化（追加）
-  if (txtFiles.length){
-    // 先にreverseして「最初に選んだ方が上」に寄せる（端末によって順序は揺れるけど一応）
-    const list = txtFiles.slice().reverse();
-    for (const f of list){
-      const text = await f.text();
-      const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
-      const n = {
-        id: uid(),
-        title: (f.name||"").replace(/\.txt$/i,""),
-        bodyHtml: body,
-        createdAt: nowTs(),
-        updatedAt: nowTs()
-      };
-      store.notes.unshift(n);
-      store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
-      store.normalOrderIds.unshift(n.id);
-    }
-    saveStore();
-    renderList();
-    toast(".txt を取り込みました");
-    return;
+  for (const f of txts){
+    const text = await f.text();
+    const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
+    const n = { id: uid(), title: f.name.replace(/\.txt$/i,""), bodyHtml: body, createdAt: nowTs(), updatedAt: nowTs() };
+    store.notes.unshift(n);
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+    store.normalOrderIds.unshift(n.id);
+    updateOneIndex(n);
   }
-
-  alert("インポート失敗：.json または .txt を選んでね");
+  saveStore();
+  renderList();
+  toast(".txt を取り込みました");
 });
 
-/* --- Drag (長押しで並び替え) --- */
+/* --- Drag (manual) */
 let dragState = null;
 
 function attachManualDrag(handleEl, rowEl, note){
@@ -1325,13 +1360,12 @@ function attachManualDrag(handleEl, rowEl, note){
 
   const start = (e)=>{
     if ((elSearch.value||"").trim()) return;
-    if (selectionMode) return;
+    if (selecting) return;
     e.preventDefault();
     e.stopPropagation();
 
     timer = setTimeout(()=>{
       beginDrag(rowEl, note);
-
       document.addEventListener("touchmove", onDragMove, {passive:false});
       document.addEventListener("touchend", onDragEnd);
       document.addEventListener("pointermove", onDragMove);
@@ -1364,7 +1398,7 @@ function beginDrag(rowEl, note){
   rowEl.classList.add("dragging");
 
   dragState = { rowEl, note, ghost, pinned };
-  toast("ドラッグで並び替え");
+  dragHint.classList.add("show");
 }
 
 function onDragMove(e){
@@ -1403,13 +1437,11 @@ function onDragEnd(){
   document.removeEventListener("pointermove", onDragMove);
   document.removeEventListener("pointerup", onDragEnd);
 
+  dragHint.classList.remove("show");
   dragState.rowEl.classList.remove("dragging");
-
   dragState.ghost.replaceWith(dragState.rowEl);
 
-  const ids = Array.from(notesEl.querySelectorAll(".rowCompact"))
-    .map(el=>el.dataset.id);
-
+  const ids = Array.from(notesEl.querySelectorAll(".rowCompact")).map(el=>el.dataset.id);
   if (dragState.pinned){
     store.pinnedIds = ids.filter(id=>isPinned(id));
   }else{
@@ -1444,31 +1476,63 @@ window.addEventListener("beforeunload", (e)=>{
 function boot(){
   ensureAtLeastOne();
   saveStore();
+  rebuildSearchIndex();
   renderList();
   history.replaceState({screen:"list"}, "");
 }
 boot();
 
-/* ===== Service Worker 登録（1回だけ）===== */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("./sw.js", { updateViaCache: "none" })
-      .then((reg) => {
-        reg.addEventListener("updatefound", () => {
-          const sw = reg.installing;
-          if (!sw) return;
+/* ===== Service Worker 登録 + 更新検知 + 再起動ボタン ===== */
+let swReg = null;
+function askReload(){
+  // ここはconfirmでOK（ボタン相当）
+  if (confirm("更新があります。再起動して反映しますか？")){
+    if (swReg && swReg.waiting){
+      swReg.waiting.postMessage({type:"SKIP_WAITING"});
+    }else{
+      location.reload();
+    }
+  }else{
+    toast("再起動で反映します");
+  }
+}
 
-          sw.addEventListener("statechange", () => {
-            if (sw.state === "installed" && navigator.serviceWorker.controller) {
-              toast("更新あり。再起動で反映");
-            }
-          });
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try{
+      swReg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
+
+      // update found
+      swReg.addEventListener("updatefound", ()=>{
+        const sw = swReg.installing;
+        if (!sw) return;
+        sw.addEventListener("statechange", ()=>{
+          if (sw.state === "installed" && navigator.serviceWorker.controller){
+            // 新しいSWが待機状態になる
+            askReload();
+          }
         });
-      })
-      .catch(() => {});
+      });
+
+      // waiting already (rare)
+      if (swReg.waiting && navigator.serviceWorker.controller){
+        askReload();
+      }
+
+      // controller changed -> reload once
+      let reloaded=false;
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+        if (reloaded) return;
+        reloaded=true;
+        location.reload();
+      });
+
+    }catch(e){
+      // ignore
+    }
   });
 }
 </script>
+
 </body>
 </html>

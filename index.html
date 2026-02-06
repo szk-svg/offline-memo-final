@@ -262,7 +262,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
    - 選択メニュー：テキスト化 / 削除 / 解除
    - Export：バックアップ or テキスト化（1件=txt / 複数=zip）
    - Import：.json置換 / .txt複数→各1メモ追加
-   - cbline Enter根治：beforeinput + 先頭Enter例外 + Backspace/Deleteでチェック解除
+   - cbline Enter/削除 根治：beforeinput（Android本命）+ 先頭Enter例外 + Backspace/Deleteで解除
    ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
@@ -388,7 +388,7 @@ const btnModalCancel = document.getElementById("btnModalCancel");
 
 const updateModalBg = document.getElementById("updateModalBg");
 const btnReloadNow = document.getElementById("btnReloadNow");
-
+const btnReloadLater = document.getElementById("btnReloadLater");
 /* store */
 function normalizeStore(s){
   if (!s || typeof s !== "object") s = {};
@@ -856,7 +856,7 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter 根治 + Backspace/Deleteでチェック解除 ---- */
+/* ---- Enter安定化 + Backspace/Deleteでチェック解除（Android対応） ---- */
 function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -869,12 +869,30 @@ function getCaretOffsetInElement(el){
   return pre.toString().length;
 }
 
-function cblineToPlainline(cbline){
+function getClosestCblineFromSelection(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return null;
+  if (node.nodeType === 3) node = node.parentNode;
+  return node?.closest?.(".cbline") || null;
+}
+
+function cblineToPlainline(cbline, focusWhere="start"){
   const cbtext = cbline.querySelector(".cbtext");
-  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
-  const pl = makePlainLine(text.trim() ? text : "");
+  const raw = (cbtext?.textContent || "").replaceAll(ZWSP,"");
+  const text = raw.trim();
+
+  const pl = makePlainLine(text ? text : "");
   cbline.replaceWith(pl);
-  setTimeout(()=>setCaretToStart(pl),0);
+
+  setTimeout(()=>{
+    if (focusWhere === "end") setCaretToEnd(pl);
+    else setCaretToStart(pl);
+  }, 0);
+
+  return pl;
 }
 
 function handleEnterInsideCbline(){
@@ -882,12 +900,7 @@ function handleEnterInsideCbline(){
   if (!sel || sel.rangeCount === 0) return false;
   if (!sel.isCollapsed) return false;
 
-  const range = sel.getRangeAt(0);
-  let node = range.startContainer;
-  if (!node) return false;
-  if (node.nodeType === 3) node = node.parentNode;
-
-  const cbline = node?.closest?.(".cbline");
+  const cbline = getClosestCblineFromSelection();
   if (!cbline) return false;
 
   const cbtext = cbline.querySelector(".cbtext");
@@ -908,12 +921,12 @@ function handleEnterInsideCbline(){
   try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
   const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
 
-  // ★先頭Enterのときは「空のcbline（☐だけ）」を作らない
-  // → 上にplainlineを1行挿入して、そこにカーソルを置く
+  // ✅ 先頭Enter：空のcbline(☐だけ)を作らず、上に空行を作ってそこへ
   if (cut === 0){
     const plUp = makePlainLine("");
     cbline.before(plUp);
     setTimeout(()=>setCaretToStart(plUp),0);
+
     draftHtml = cleanHtml(editor.innerHTML);
     updateDirtyFlag();
     schedulePushSnapshot();
@@ -927,7 +940,6 @@ function handleEnterInsideCbline(){
 
   const pl = makePlainLine(right);
   cbline.after(pl);
-
   setTimeout(()=>setCaretToStart(pl),0);
 
   draftHtml = cleanHtml(editor.innerHTML);
@@ -936,17 +948,13 @@ function handleEnterInsideCbline(){
   return true;
 }
 
+// ✅ cbtext先頭でBackspace/Delete → チェック行→通常行に戻す（消せない問題の根治）
 function handleBackspaceDeleteOnCbline(key){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
   if (!sel.isCollapsed) return false;
 
-  const range = sel.getRangeAt(0);
-  let node = range.startContainer;
-  if (!node) return false;
-  if (node.nodeType === 3) node = node.parentNode;
-
-  const cbline = node?.closest?.(".cbline");
+  const cbline = getClosestCblineFromSelection();
   if (!cbline) return false;
 
   const cbtext = cbline.querySelector(".cbtext");
@@ -954,23 +962,19 @@ function handleBackspaceDeleteOnCbline(key){
 
   let caret = null;
   try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
-  // caret取れない端末は「消せない」を避けるため、チェック解除に倒す
   const atStart = (caret == null) ? true : (caret === 0);
+  if (!atStart) return false;
 
-  // text先頭で Backspace/Delete → チェックだけ外して通常行に戻す
-  if (atStart && (key === "Backspace" || key === "Delete")){
-    pushUndoSnapshot();
-    cblineToPlainline(cbline);
-    draftHtml = cleanHtml(editor.innerHTML);
-    updateDirtyFlag();
-    schedulePushSnapshot();
-    return true;
-  }
+  pushUndoSnapshot();
+  cblineToPlainline(cbline, "start");
 
-  return false;
+  draftHtml = cleanHtml(editor.innerHTML);
+  updateDirtyFlag();
+  schedulePushSnapshot();
+  return true;
 }
 
-/* ★beforeinputでEnterを確実に止める */
+/* ★beforeinput：Androidの本命（Enter/削除はここで来ることが多い） */
 editor.addEventListener("beforeinput", (e)=>{
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
@@ -982,16 +986,35 @@ editor.addEventListener("beforeinput", (e)=>{
     ((t === "insertCompositionText" || t === "insertFromComposition") &&
       (data.includes("\n") || data.includes("\r")));
 
-  if (!looksLikeEnter) return;
+  if (looksLikeEnter){
+    const handled = handleEnterInsideCbline();
+    if (handled){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
 
-  const handled = handleEnterInsideCbline();
-  if (handled){
-    e.preventDefault();
-    e.stopPropagation();
+  if (t === "deleteContentBackward"){
+    const handled = handleBackspaceDeleteOnCbline("Backspace");
+    if (handled){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
+
+  if (t === "deleteContentForward"){
+    const handled = handleBackspaceDeleteOnCbline("Delete");
+    if (handled){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
   }
 });
 
-/* keydown：Enter/Backspace/Delete を補足 */
+/* keydown：一部端末の保険 */
 editor.addEventListener("keydown", (e)=>{
   if (e.key === "Enter"){
     const handled = handleEnterInsideCbline();
@@ -1037,7 +1060,6 @@ elTitle.addEventListener("input", ()=>{
   updateDirtyFlag();
   schedulePushSnapshot();
 });
-
 /* color */
 function applyColor(color){
   pushUndoSnapshot();

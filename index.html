@@ -136,11 +136,6 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
   margin-top:10px;border-top:1px solid var(--line);padding-top:10px;
   max-height:48vh;overflow:auto;
 }
-.pickRow{display:flex;gap:10px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--line)}
-.pickRow:last-child{border-bottom:none}
-.pickRow .t{font-weight:900;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pickRow .m{font-size:12px;color:var(--muted);font-weight:800}
-.pickRow .col{min-width:0;flex:1}
 .small{font-size:12px;color:var(--muted);font-weight:800;margin-top:8px}
 
 /* drag feedback */
@@ -280,26 +275,36 @@ function stripTags(html){
 function escapeHtml(s){
   return (s||"").replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
-function downloadBlob(blob, filename){
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=> URL.revokeObjectURL(url), 1200);
-}
-/* ファイル名用：禁止文字を潰す */
 function sanitizeFileName(name){
   return (name||"").replace(/[\\\/:*?"<>|]/g,"_").trim();
 }
-/* 同名が被ったら 2,3... を付ける */
 function uniqueName(base, usedMap){
   const key = base;
   const n = (usedMap.get(key) || 0) + 1;
   usedMap.set(key, n);
   return n === 1 ? base : `${base}${n}`;
+}
+
+/* ★Android Chrome対策：DLを少し丁寧に（間隔 + revoke遅らせる） */
+async function downloadTextAsFile(filename, text){
+  const blob = new Blob([text], {type:"text/plain"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+
+  // クリックを同一タスクで発火
+  a.click();
+  a.remove();
+
+  // revoke は遅めに（早すぎると失敗する端末あり）
+  setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){} }, 15000);
+
+  // 連続DLの間隔（これで「一番上だけ失敗」系がかなり減る）
+  await new Promise(r=>setTimeout(r, 900));
 }
 
 /* toast */
@@ -332,7 +337,6 @@ function showModal(title){
   modalTitle.textContent = title;
   modalBack.classList.add("show");
 }
-
 /* DOM refs */
 const screenList = document.getElementById("screenList");
 const screenEdit = document.getElementById("screenEdit");
@@ -486,12 +490,13 @@ btnBulkDel.addEventListener("click", ()=>{
   saveStore();
   rebuildSearchIndex();
   toast("削除しました");
-  setSelecting(false);
+  setSelecting(false); // ★自動解除
 });
 
 btnBulkTxt.addEventListener("click", async ()=>{
   if (selectedIds.size===0) return;
   await exportSelectedAsTxt(Array.from(selectedIds));
+  setSelecting(false); // ★自動解除（テキスト化後）
 });
 
 /* dirty + screens */
@@ -524,8 +529,6 @@ function setMode(edit){
     normalizeCbLines(viewer);
   }
 }
-
-/* section label */
 function addHeading(text){
   const lab = document.createElement("div");
   lab.className = "sectionLabel";
@@ -558,6 +561,12 @@ function buildList(){
   return { pinned, normal, searching:false };
 }
 
+function toggleSelected(id){
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+  updateBulkCount();
+  renderList();
+}
 /* row */
 function renderRow(note, searching){
   const row = document.createElement("div");
@@ -652,12 +661,6 @@ function renderRow(note, searching){
 
   return row;
 }
-function toggleSelected(id){
-  if (selectedIds.has(id)) selectedIds.delete(id);
-  else selectedIds.add(id);
-  updateBulkCount();
-  renderList();
-}
 
 /* render */
 function renderList(){
@@ -718,7 +721,7 @@ function openNote(id){
   history.pushState({screen:"edit", id: currentId}, "");
 }
 
-/* search input debounce */
+/* search debounce */
 let searchT=null;
 elSearch.addEventListener("input", ()=>{
   clearTimeout(searchT);
@@ -811,7 +814,6 @@ function fixCbDom(root){
   normalizeCbLines(root);
 }
 
-/* sync draft */
 function syncDraftFromCurrent(){
   draftTitle = elTitle.value || "";
   draftHtml = isEditing ? editor.innerHTML : viewer.innerHTML;
@@ -1015,7 +1017,6 @@ elTitle.addEventListener("input", ()=>{
   schedulePushSnapshot();
 });
 
-/* color */
 function applyColor(color){
   if (!isEditing) setMode(true);
   pushUndoSnapshot();
@@ -1039,7 +1040,6 @@ btnRed.addEventListener("click", ()=>{
   applyColor("#d23b3b");
 });
 
-/* --- 行取得（強化版） */
 function getCurrentBlockInEditor(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -1142,7 +1142,6 @@ btnCb.addEventListener("click", ()=>{
   schedulePushSnapshot();
 });
 
-/* save/back/delete */
 function confirmDiscardIfDirty(){
   if (!dirty) return true;
   return confirm("更新は破棄されますがよろしいですか？");
@@ -1195,10 +1194,21 @@ btnDeleteInEdit.addEventListener("click", ()=>{
   toast("削除しました");
   showList();
 });
-
 /* =========================
    export/import + drag + boot + hardware back
    ========================= */
+
+function downloadBlobJson(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display="none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){} }, 15000);
+}
 
 async function exportBackupJson(){
   if (!screenEdit.classList.contains("hidden") && dirty){
@@ -1208,7 +1218,7 @@ async function exportBackupJson(){
   const payload = { version: 1, exportedAt: nowTs(), data: store };
   const json = JSON.stringify(payload, null, 2);
   const blob = new Blob([json], {type:"application/json"});
-  downloadBlob(blob, `offline-memo-backup-${stampForFile()}.json`);
+  downloadBlobJson(blob, `offline-memo-backup-${stampForFile()}.json`);
   toast("書き出しました");
 }
 
@@ -1224,11 +1234,10 @@ function htmlToTxt(bodyHtml){
   return (tmp.innerText || "").replace(/\u00a0/g," ");
 }
 
-/* ★ここが要望反映：タイトルをファイル名に、被りは2,3...で回避 */
+/* txt出力（タイトルをファイル名、重複は2,3…） + Android連続DL安定化 */
 async function exportSelectedAsTxt(ids){
   if (!ids || ids.length===0) return;
 
-  // ファイル名の重複カウント（タイトル単位）
   const used = new Map();
 
   for (let i=0;i<ids.length;i++){
@@ -1240,16 +1249,24 @@ async function exportSelectedAsTxt(ids){
     base = sanitizeFileName(base);
     if (!base) base = "無題";
 
-    const uniq = uniqueName(base, used); // 無題/無題2/無題3...
+    const uniq = uniqueName(base, used);
     const filename = `${uniq}.txt`;
 
     const txt = htmlToTxt(n.bodyHtml);
-    const blob = new Blob([txt], {type:"text/plain"});
-    downloadBlob(blob, filename);
 
-    // Android対策：連続DLの間隔
-    await new Promise(r=>setTimeout(r, 350));
+    try{
+      await downloadTextAsFile(filename, txt);
+    }catch(e){
+      // 失敗時：間隔をさらに空けて1回だけリトライ
+      await new Promise(r=>setTimeout(r, 1200));
+      try{
+        await downloadTextAsFile(filename, txt);
+      }catch(_){
+        alert(`ダウンロード失敗：${filename}\n（Chromeの制限で連続DLが落ちることがあります。少し待って再実行してね）`);
+      }
+    }
   }
+
   toast("txtを書き出しました");
 }
 
@@ -1294,7 +1311,7 @@ fileImport.addEventListener("change", async ()=>{
   const jsonFile = files.find(f => (f.name||"").toLowerCase().endsWith(".json"));
   if (jsonFile){
     try{
-            const text = await jsonFile.text();
+      const text = await jsonFile.text();
       const obj = safeParse(text, null);
       if (!obj || !obj.data) throw new Error("invalid");
       store = normalizeStore(obj.data);

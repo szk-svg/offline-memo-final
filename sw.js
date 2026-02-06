@@ -1,3 +1,4 @@
+// 最後のコード貼る
 const CACHE_NAME = "offline-memo-final-v7";
 const APP_SHELL = [
   "./",

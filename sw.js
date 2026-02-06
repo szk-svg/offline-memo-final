@@ -22,7 +22,6 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// 「更新→再起動しますか？」で即反映する用
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
@@ -39,7 +38,6 @@ self.addEventListener("fetch", (event) => {
 
       return fetch(req)
         .then((res) => {
-          // opaque（拡張とか）を無理にcacheしない
           if (!res || res.status !== 200 || res.type !== "basic") return res;
           const copy = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));

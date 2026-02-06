@@ -251,13 +251,6 @@ body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;back
 <script>
 /* =========================
  offline-memo-final v7+
- - ★固定：pinnedIds（ドラッグで並び替え）
- - 更新順：normalOrderIds（ドラッグで並び替え）
- - 保存(更新)で通常メモは更新順先頭へ
- - 複数選択/複数削除/選択txtエクスポート/複数txtインポート
- - Enter/Deleteのcbline崩れ対策
- - SW更新通知 + 再起動ボタン
- - 検索/描画の軽量化（インメモリindex）
  ========================= */
 
 const STORAGE_KEY = "offline_memo_final_v7";
@@ -296,6 +289,17 @@ function downloadBlob(blob, filename){
   a.click();
   a.remove();
   setTimeout(()=> URL.revokeObjectURL(url), 1200);
+}
+/* ファイル名用：禁止文字を潰す */
+function sanitizeFileName(name){
+  return (name||"").replace(/[\\\/:*?"<>|]/g,"_").trim();
+}
+/* 同名が被ったら 2,3... を付ける */
+function uniqueName(base, usedMap){
+  const key = base;
+  const n = (usedMap.get(key) || 0) + 1;
+  usedMap.set(key, n);
+  return n === 1 ? base : `${base}${n}`;
 }
 
 /* toast */
@@ -459,7 +463,7 @@ function setSelecting(on){
   btnSelect.classList.toggle("primary", selecting);
   btnSelect.textContent = selecting ? "選択中" : "選択";
   updateBulkCount();
-  renderList(); // reflect checkbox UI
+  renderList();
 }
 function updateBulkCount(){
   bulkCount.textContent = `${selectedIds.size}件選択`;
@@ -765,11 +769,9 @@ function toggleCbLine(line){
   const box = line.querySelector(".cbox");
   if (box) box.textContent = next ? "☑" : "☐";
 }
-
-/* cb DOM fix: Delete/Enterで崩れても復元 */
 function fixCbDom(root){
   root.querySelectorAll(".cbline").forEach(line=>{
-    line.setAttribute("contenteditable","false"); // line自体は編集不可にして
+    line.setAttribute("contenteditable","false");
     let box = line.querySelector(".cbox");
     let text = line.querySelector(".cbtext");
 
@@ -788,23 +790,18 @@ function fixCbDom(root){
     }
     text.contentEditable="true";
 
-    // 余計なノードが line 直下にいたら cbtext に寄せる
     const kids = Array.from(line.childNodes);
     for (const k of kids){
       if (k === box || k === text) continue;
       text.appendChild(k);
     }
 
-    // cbtext内の改行はbrに寄せる（変なDIV混入抑制）
     text.querySelectorAll("div").forEach(d=>{
       const br = document.createElement("br");
       d.replaceWith(br);
     });
-
-    // 空ならゼロ幅スペースは入れない（表示だけ空）
   });
 
-  // contenteditableを壊さないため最後に戻す
   root.querySelectorAll(".cbline").forEach(line=>{
     line.removeAttribute("contenteditable");
     const t = line.querySelector(".cbtext");
@@ -927,11 +924,6 @@ editor.addEventListener("click", (e)=>{
   }
 });
 
-/* ---- Enter / Delete fix (checkbox line) ----
-   - “cblineの左側空白にカーソル”でも確実にcbline判定する
-   - Enterは cbline外に新規行を作り、そこへカーソル移動
-   - Backspace/Deleteでcboxが壊れないように保護
-*/
 function findCbLineFromSelection(){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -939,7 +931,6 @@ function findCbLineFromSelection(){
 
   let node = range.startContainer;
 
-  // nodeがeditor直下（=左側空白タップ等）なら、近い子から探す
   if (node === editor){
     const i = Math.max(0, range.startOffset - 1);
     const near = editor.childNodes[i] || editor.childNodes[range.startOffset] || null;
@@ -974,12 +965,9 @@ function placeCaretInNewEmptyLineAfter(el){
 
 editor.addEventListener("keydown", (e)=>{
   const key = e.key;
-
-  // cbline判定（左余白タップ問題を潰す）
   const line = findCbLineFromSelection();
   if (!line) return;
 
-  // 選択範囲ありは通常に任せる
   const sel = window.getSelection();
   if (!sel || !sel.isCollapsed) return;
 
@@ -987,7 +975,6 @@ editor.addEventListener("keydown", (e)=>{
     e.preventDefault();
     pushUndoSnapshot();
 
-    // cbline直後に空行作ってそこへ
     placeCaretInNewEmptyLineAfter(line);
 
     draftHtml = editor.innerHTML;
@@ -1000,12 +987,8 @@ editor.addEventListener("keydown", (e)=>{
   }
 
   if (key === "Backspace" || key === "Delete"){
-    // cbox側にカーソル行ったり崩れるのを避ける：cbtext外ならcbtext末尾へ寄せる
     const r = sel.getRangeAt(0);
-    let n = r.startContainer;
-    if (n.nodeType === 3) n = n.parentElement;
     const cbtext = line.querySelector(".cbtext");
-
     if (!cbtext) return;
 
     if (!cbtext.contains(r.startContainer)){
@@ -1017,23 +1000,10 @@ editor.addEventListener("keydown", (e)=>{
       sel.addRange(rr);
       return;
     }
-
-    // cbtext先頭でBackspace：cbline崩れやすい端末があるので、通常行に戻す（安全策）
-    if (key === "Backspace"){
-      const tmp = document.createElement("div");
-      tmp.appendChild(r.cloneContents());
-      const atStart = (cbtext.textContent||"").length>0 && r.startOffset===0 && r.startContainer === cbtext.firstChild;
-      if (atStart){
-        // ただし“戻す”はユーザー体験悪いので、ここは軽く抑制のみ
-        // → まず崩れを防ぐためにDOMを固定
-        fixCbDom(editor);
-      }
-    }
   }
 });
 
 editor.addEventListener("input", ()=>{
-  // 入力で崩れたら即修正
   fixCbDom(editor);
   draftHtml = editor.innerHTML;
   updateDirtyFlag();
@@ -1245,27 +1215,39 @@ async function exportBackupJson(){
 function htmlToTxt(bodyHtml){
   const tmp = document.createElement("div");
   tmp.innerHTML = bodyHtml || "";
-  // cblineをわかりやすく整形（☑/☐ + space + text）
   tmp.querySelectorAll(".cbline").forEach(line=>{
     const done = line.getAttribute("data-done")==="true";
     const t = line.querySelector(".cbtext")?.textContent ?? "";
     const rep = document.createTextNode((done?"[x] ":"[ ] ") + t);
     line.replaceWith(rep);
   });
-  // <br>を改行扱いにしたいので innerText
   return (tmp.innerText || "").replace(/\u00a0/g," ");
 }
 
+/* ★ここが要望反映：タイトルをファイル名に、被りは2,3...で回避 */
 async function exportSelectedAsTxt(ids){
   if (!ids || ids.length===0) return;
-  // Androidは連続DLが詰まることがあるので軽く間隔
+
+  // ファイル名の重複カウント（タイトル単位）
+  const used = new Map();
+
   for (let i=0;i<ids.length;i++){
     const n = getNote(ids[i]);
     if (!n) continue;
-    const title = ((n.title||"").trim() ? n.title.trim() : "memos").replace(/[\\\/:*?"<>|]/g,"_");
+
+    let base = (n.title||"").trim();
+    if (!base) base = "無題";
+    base = sanitizeFileName(base);
+    if (!base) base = "無題";
+
+    const uniq = uniqueName(base, used); // 無題/無題2/無題3...
+    const filename = `${uniq}.txt`;
+
     const txt = htmlToTxt(n.bodyHtml);
     const blob = new Blob([txt], {type:"text/plain"});
-    downloadBlob(blob, `${title || "memo"}-${stampForFile()}.txt`);
+    downloadBlob(blob, filename);
+
+    // Android対策：連続DLの間隔
     await new Promise(r=>setTimeout(r, 350));
   }
   toast("txtを書き出しました");
@@ -1285,7 +1267,6 @@ btnExport.addEventListener("click", ()=>{
   b2.className="btn ghost"; b2.type="button";
   b2.textContent="テキスト化(.txt)";
   b2.onclick = ()=>{
-    // 選択中ならそのまま、未選択なら選択画面へ
     closeModal();
     if (!selecting) setSelecting(true);
     toast("書き出すメモを選んで「選択メモをtxt」");
@@ -1300,21 +1281,20 @@ btnExport.addEventListener("click", ()=>{
   modalFoot.textContent = "※ テキスト化は「選択」→複数選択→「選択メモをtxt」";
 });
 
+/* Import */
 btnImport.addEventListener("click", ()=>{
   fileImport.value = "";
   fileImport.click();
 });
 
-/* Import: .jsonは置換 / .txtは複数OKで各ファイル=1メモ追加 */
 fileImport.addEventListener("change", async ()=>{
   const files = fileImport.files ? Array.from(fileImport.files) : [];
   if (!files.length) return;
 
-  // jsonが混ざってたら json優先（1つだけ想定）
   const jsonFile = files.find(f => (f.name||"").toLowerCase().endsWith(".json"));
   if (jsonFile){
     try{
-      const text = await jsonFile.text();
+            const text = await jsonFile.text();
       const obj = safeParse(text, null);
       if (!obj || !obj.data) throw new Error("invalid");
       store = normalizeStore(obj.data);
@@ -1330,7 +1310,6 @@ fileImport.addEventListener("change", async ()=>{
     }
   }
 
-  // txt複数
   const txts = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
   if (!txts.length){
     alert("インポート失敗：.json か .txt を選んでね");
@@ -1485,7 +1464,6 @@ boot();
 /* ===== Service Worker 登録 + 更新検知 + 再起動ボタン ===== */
 let swReg = null;
 function askReload(){
-  // ここはconfirmでOK（ボタン相当）
   if (confirm("更新があります。再起動して反映しますか？")){
     if (swReg && swReg.waiting){
       swReg.waiting.postMessage({type:"SKIP_WAITING"});
@@ -1502,24 +1480,20 @@ if ("serviceWorker" in navigator) {
     try{
       swReg = await navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" });
 
-      // update found
       swReg.addEventListener("updatefound", ()=>{
         const sw = swReg.installing;
         if (!sw) return;
         sw.addEventListener("statechange", ()=>{
           if (sw.state === "installed" && navigator.serviceWorker.controller){
-            // 新しいSWが待機状態になる
             askReload();
           }
         });
       });
 
-      // waiting already (rare)
       if (swReg.waiting && navigator.serviceWorker.controller){
         askReload();
       }
 
-      // controller changed -> reload once
       let reloaded=false;
       navigator.serviceWorker.addEventListener("controllerchange", ()=>{
         if (reloaded) return;

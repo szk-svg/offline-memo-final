@@ -1,4 +1,5 @@
-const CACHE_NAME = "offline-memo-final-v7-3";
+--- sw.js ---
+const CACHE_NAME = "offline-memo-final-v7";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -22,8 +23,8 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
+self.addEventListener("message", (event)=>{
+  if (event.data && event.data.type === "SKIP_WAITING"){
     self.skipWaiting();
   }
 });
@@ -35,7 +36,8 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
-      return fetch(req)
+
+      return fetch(req, {cache:"no-store"})
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));

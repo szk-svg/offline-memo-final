@@ -302,6 +302,25 @@ function htmlToText(html){
   });
   return (div.textContent || "").replace(/\u200B/g,"").replace(/\r/g,"").trim();
 }
+const ZWSP = "\u200B";
+
+function makePlainLine(){
+  const div = document.createElement("div");
+  div.className = "plainline";
+  // ZWSP + br で「確実にカーソルが置ける空行」にする
+  div.innerHTML = `<span class="zwsp">${ZWSP}</span><br>`;
+  return div;
+}
+
+function setCaretTo(el, atEnd=false){
+  const sel = window.getSelection();
+  if (!sel) return;
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(!atEnd ? true : false);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
 
 /* toast */
 const toastEl = document.getElementById("toast");
@@ -889,7 +908,10 @@ function handleEnterInsideCbline(){
 
   const range = sel.getRangeAt(0);
   let node = range.startContainer;
-  if (node && node.nodeType === 3) node = node.parentNode;
+  if (!node) return false;
+
+  // text node -> element
+  if (node.nodeType === 3) node = node.parentNode;
 
   const cbline = node?.closest?.(".cbline");
   if (!cbline) return false;
@@ -897,20 +919,26 @@ function handleEnterInsideCbline(){
   const cbtext = cbline.querySelector(".cbtext");
   pushUndoSnapshot();
 
+  // cbtext が無いケースは保険で「次の行へ逃がす」
   if (!cbtext){
     const pl = makePlainLine("");
     cbline.after(pl);
-    setTimeout(()=>setCaretToEnd(pl),0);
+    setTimeout(()=>setCaretToStart(pl),0);
     draftHtml = cleanHtml(editor.innerHTML);
     updateDirtyFlag();
     schedulePushSnapshot();
     return true;
   }
 
+  // どこでEnterしても「cblineを分割」できるようにする
+  // caret取得が怪しい端末は「末尾扱い」で良い
   const full = cbtext.textContent || "";
-  const caret = getCaretOffsetInElement(cbtext);
-
-  // caretが取れない端末は「末尾扱い」でOK
+  let caret = null;
+  try{
+    caret = getCaretOffsetInElement(cbtext);
+  }catch(_){
+    caret = null;
+  }
   const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
 
   const left = full.slice(0, cut);
@@ -918,12 +946,14 @@ function handleEnterInsideCbline(){
 
   cbtext.textContent = left;
 
+  // ✅ cbline直後に「plainline」を作る（div/brじゃなくて必ずplainline）
   const pl = makePlainLine(right);
   cbline.after(pl);
 
-  // 次行の先頭へ
+  // ✅ 次行の先頭へカーソル
   setTimeout(()=>setCaretToStart(pl),0);
 
+  // 反映
   draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
   schedulePushSnapshot();

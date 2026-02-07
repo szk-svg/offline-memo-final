@@ -877,7 +877,7 @@ function runPostCbFix(){
   // “最初の1打”でズレても戻す
   editor.focus();
   setCaretToStart(pl);
-},
+}
 function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;

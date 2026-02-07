@@ -854,6 +854,30 @@ editor.addEventListener("click", (e)=>{
 });
 
 /* ---- Enter 根治 + Backspace/Deleteでチェック解除（Gboard対策込み） ---- */
+/* ===== POST-CHECK FIX (Gboard: 直後だけキャレットが壊れる対策) ===== */
+let postCbFix = null;
+
+function armPostCbFix(pl){
+  // チェック化直後の「次行plainline」を記憶
+  postCbFix = { pl, at: performance.now() };
+}
+
+function runPostCbFix(){
+  if (!postCbFix) return;
+
+  // 直後だけ（短時間）有効にする
+  if ((performance.now() - postCbFix.at) > 800){
+    postCbFix = null;
+    return;
+  }
+
+  const pl = postCbFix.pl;
+  if (!pl || !document.contains(pl)) return;
+
+  // “最初の1打”でズレても戻す
+  editor.focus();
+  setCaretToStart(pl);
+},
 function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
@@ -1013,6 +1037,9 @@ function handleBackspaceDeleteAroundCbline(kind /* "Backspace" | "Delete" */){
 
 /* ★beforeinput：Android(Gboard)はここが本命 */
 editor.addEventListener("beforeinput", (e)=>{
+  // ★チェック化直後だけ selection がズレるので、最初に補正
+  runPostCbFix();
+
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "offline-memo-final-v7.2";
+const CACHE_NAME = "offline-memo-final-v7.1";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -32,12 +32,15 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
-  // ★ ナビゲーション(=HTML表示)は network-first（更新が反映されない問題を潰す）
+  const url = new URL(req.url);
+
+  // ★ナビゲーション（= index表示）は network-first にする
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);
       try {
         const fresh = await fetch(req);
+        // 最新をキャッシュ
         cache.put("./index.html", fresh.clone());
         return fresh;
       } catch (e) {
@@ -48,7 +51,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // それ以外は cache-first
+  // それ以外は cache-first（同一オリジンのみキャッシュ）
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
     const cached = await cache.match(req, { ignoreSearch: true });
@@ -56,7 +59,6 @@ self.addEventListener("fetch", (event) => {
 
     try {
       const res = await fetch(req);
-      const url = new URL(req.url);
       if (url.origin === self.location.origin) {
         cache.put(req, res.clone());
       }

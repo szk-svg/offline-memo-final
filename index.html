@@ -1,1203 +1,1045 @@
 <!doctype html>
 <html lang="ja">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-  <meta name="theme-color" content="#ffffff"/>
-  <link rel="manifest" href="./manifest.json">
-  <title>offline-memo-final v7</title>
-  <style>
-    :root{
-      --bg:#fff;
-      --fg:#111;
-      --muted:#666;
-      --line:#e5e5e5;
-      --accent:#111;
-      --danger:#d11;
-      --ok:#0a7;
-      --shadow: 0 6px 24px rgba(0,0,0,.12);
-      --radius: 12px;
-      --radius2: 16px;
-      --toolbarH: 56px;
-      --safeB: env(safe-area-inset-bottom, 0px);
-      --safeT: env(safe-area-inset-top, 0px);
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%;}
-    body{
-      margin:0;
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
-      background:var(--bg);
-      color:var(--fg);
-      -webkit-text-size-adjust: 100%;
-    }
-    button{
-      font: inherit;
-      border: 1px solid var(--line);
-      background:#fff;
-      padding:10px 12px;
-      border-radius:10px;
-      cursor:pointer;
-      touch-action: manipulation;
-    }
-    button:active{transform:translateY(1px)}
-    button.primary{
-      background:var(--accent);
-      color:#fff;
-      border-color:var(--accent);
-    }
-    button.danger{
-      background:var(--danger);
-      color:#fff;
-      border-color:var(--danger);
-    }
-    button.ghost{
-      background:transparent;
-      border-color:transparent;
-    }
-    button.icon{
-      padding:10px 10px;
-      width:44px;
-      height:44px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-    }
-    input[type="text"], textarea{
-      font: inherit;
-      border:1px solid var(--line);
-      border-radius:10px;
-      padding:10px 12px;
-      width:100%;
-    }
-    .app{
-      height:100%;
-      display:flex;
-      flex-direction:column;
-    }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>offline-memo-final</title>
 
-    /* header */
-    .topbar{
-      position:sticky;
-      top:0;
-      z-index:5;
-      background:rgba(255,255,255,.92);
-      backdrop-filter: blur(10px);
-      border-bottom:1px solid var(--line);
-      padding: 10px 12px calc(10px + var(--safeT));
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-    .topbar .title{
-      font-weight:700;
-      font-size:16px;
-      flex:1;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .topbar .right{
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-    .badge{
-      font-size:12px;
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      color:var(--muted);
-      white-space:nowrap;
-    }
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#111111">
 
-    /* list */
-    .listWrap{
-      flex:1;
-      overflow:auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 12px;
-    }
-    .searchRow{
-      display:flex;
-      gap:8px;
-      margin-bottom:12px;
-      align-items:center;
-    }
-    .searchRow input{
-      flex:1;
-    }
+<style>
+:root{
+  --bg:#fff; --card:#fff; --line:#e9e9e9; --text:#111; --muted:#777;
+  --accent:#111; --danger:#d23b3b; --pill:#f4f4f4;
+  --shadow:0 8px 24px rgba(0,0,0,.06);
+  --r:16px; --tap:rgba(0,0,0,.06);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font-family:system-ui,-apple-system,"Noto Sans JP",sans-serif;background:var(--bg);color:var(--text)}
 
-    .sectionTitle{
-      margin:14px 0 8px;
-      font-weight:800;
-      color:#222;
-      display:flex;
-      align-items:center;
-      gap:8px;
-    }
-    .sectionTitle small{
-      font-weight:600;
-      color:var(--muted);
-    }
+.topbar{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:14px;z-index:30}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand h1{margin:0;font-size:22px;font-weight:900}
 
-    .memoCard{
-      border:1px solid var(--line);
-      border-radius: var(--radius2);
-      padding:12px;
-      margin-bottom:10px;
-      box-shadow: 0 1px 0 rgba(0,0,0,.03);
-      background:#fff;
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-    }
-    .memoCard .left{
-      flex:1;
-      min-width:0;
-    }
-    .memoCard .t{
-      font-weight:800;
-      margin:0;
-      font-size:15px;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .memoCard .meta{
-      margin-top:4px;
-      font-size:12px;
-      color:var(--muted);
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .memoCard .snippet{
-      margin-top:8px;
-      font-size:13px;
-      color:#222;
-      line-height:1.35;
-      display:-webkit-box;
-      -webkit-line-clamp:2;
-      -webkit-box-orient:vertical;
-      overflow:hidden;
-      word-break:break-word;
-    }
-    .memoCard .actions{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-      align-items:flex-end;
-    }
-    .dragHandle{
-      user-select:none;
-      font-weight:900;
-      width:44px;
-      height:44px;
-      border:1px solid var(--line);
-      border-radius:10px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      color:#333;
-      background:#fff;
-      touch-action:none;
-    }
-    .pinBtn{
-      width:44px;
-      height:44px;
-      border:1px solid var(--line);
-      border-radius:10px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      background:#fff;
-    }
-    .pinBtn.pinned{
-      border-color:#111;
-      background:#111;
-      color:#fff;
-    }
+.btn{border:1px solid var(--accent);background:#fff;color:var(--accent);
+  border-radius:14px;padding:10px 14px;font-weight:900;font-size:14px}
+.btn.primary{background:var(--accent);color:#fff}
+.btn.ghost{border-color:var(--line)}
+.btn.danger{border-color:#f2c0c0;color:var(--danger)}
+.btn:active{background:var(--tap)}
+.btn[disabled]{opacity:.45}
 
-    .empty{
-      padding:40px 16px;
-      text-align:center;
-      color:var(--muted);
-    }
+.container{padding:14px;max-width:980px;margin:0 auto}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--shadow);padding:14px}
 
-    /* editor */
-    .editorWrap{
-      position:fixed;
-      inset:0;
-      background:var(--bg);
-      display:none;
-      flex-direction:column;
-      z-index:10;
-    }
-    .editorWrap.show{display:flex;}
-    .editTop{
-      position:sticky;
-      top:0;
-      z-index:11;
-      background:rgba(255,255,255,.92);
-      backdrop-filter: blur(10px);
-      border-bottom:1px solid var(--line);
-      padding: 10px 12px calc(10px + var(--safeT));
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-    .editTop .left{
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
-    .editTop .center{
-      flex:1;
-      min-width:0;
-      display:flex;
-      align-items:center;
-    }
-    .editTop .center input{
-      font-weight:800;
-    }
-    .editTop .right{
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
+.row{display:flex;gap:10px;align-items:center}
+.spacer{flex:1}
 
-    .editorBody{
-      flex:1;
-      overflow:auto;
-      -webkit-overflow-scrolling: touch;
-      padding: 12px 12px calc(var(--toolbarH) + 12px + var(--safeB));
-    }
+.pill{background:var(--pill);border:1px solid var(--line);
+  border-radius:999px;padding:8px 10px;font-size:12px;color:var(--muted);font-weight:900}
+.muted{color:var(--muted);font-size:12px;font-weight:800}
 
-    .ce{
-      border:1px solid var(--line);
-      border-radius: var(--radius2);
-      padding:12px;
-      min-height: 55vh;
-      line-height:1.45;
-      outline:none;
-      word-break:break-word;
-      white-space:pre-wrap;
-      background:#fff;
-    }
-    .ce:focus{
-      border-color:#cfcfcf;
-      box-shadow: 0 0 0 4px rgba(0,0,0,.06);
-    }
+.search{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);font-size:15px}
 
-    /* line nodes inside contenteditable */
-    .line{
-      display:block;
-      padding: 2px 0;
-    }
-    .plainline{
-      display:block;
-    }
-    .cbline{
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
-    }
-    .cbbox{
-      width: 22px;
-      height: 22px;
-      border: 2px solid #333;
-      border-radius: 6px;
-      margin-top: 2px;
-      flex: 0 0 auto;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      font-size:16px;
-      line-height:1;
-      user-select:none;
-      cursor:pointer;
-    }
-    .cbline.checked .cbbox{
-      background:#111;
-      border-color:#111;
-      color:#fff;
-    }
-    .cbtext{
-      flex:1;
-      min-width:0;
-      outline:none;
-      white-space:pre-wrap;
-      word-break:break-word;
-    }
+.list{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.sectionLabel{margin:10px 0 4px;font-weight:900;color:#444;font-size:14px;display:flex;gap:8px;align-items:center}
 
-    /* bottom toolbar (A案) */
-    .bottomBar{
-      position:fixed;
-      left:0; right:0; bottom:0;
-      height: calc(var(--toolbarH) + var(--safeB));
-      padding: 10px 12px calc(10px + var(--safeB));
-      background: rgba(255,255,255,.92);
-      backdrop-filter: blur(10px);
-      border-top:1px solid var(--line);
-      display:flex;
-      gap:10px;
-      align-items:center;
-      z-index:12;
-    }
-    .bottomBar .grow{flex:1}
-    .bottomBar .group{
-      display:flex;
-      gap:8px;
-      align-items:center;
-    }
+.rowCompact{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border:1px solid var(--line);
+  border-radius:14px;background:#fff;
+  user-select:none;-webkit-user-select:none;
+}
+.rowCompact.selected{outline:2px solid rgba(17,17,17,.45)}
+.rowLeft{flex:1;min-width:0}
+.rowTitle{font-weight:900;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rowMeta{font-size:12px;color:var(--muted);margin-top:2px;font-weight:800}
+.rowActions{display:flex;gap:6px;align-items:center}
 
-    /* modal */
-    .modalOverlay{
-      position:fixed;
-      inset:0;
-      background: rgba(0,0,0,.35);
-      display:none;
-      align-items:center;
-      justify-content:center;
-      padding: 14px;
-      z-index:50;
-    }
-    .modalOverlay.show{display:flex;}
-    .modal{
-      width:min(540px, 100%);
-      background:#fff;
-      border-radius:16px;
-      box-shadow: var(--shadow);
-      border:1px solid var(--line);
-      padding: 14px;
-    }
-    .modal h3{
-      margin:0 0 6px;
-      font-size:16px;
-    }
-    .modal p{
-      margin:0 0 12px;
-      color:var(--muted);
-      font-size:13px;
-      line-height:1.45;
-    }
-    .modal .row{
-      display:flex;
-      gap:10px;
-      justify-content:flex-end;
-      flex-wrap:wrap;
-    }
+.miniBtn{
+  width:36px;height:36px;border-radius:12px;
+  border:1px solid var(--line);background:#fff;
+  display:grid;place-items:center;font-size:15px;
+  user-select:none;-webkit-user-select:none;touch-action:manipulation;
+}
+.miniBtn:active{background:var(--tap)}
+.miniBtn.danger{border-color:#f2c0c0;color:var(--danger)}
+.miniBtn.dim{opacity:.35}
 
-    /* toast */
-    .toast{
-      position:fixed;
-      left:50%;
-      transform:translateX(-50%);
-      bottom: calc(16px + var(--toolbarH) + var(--safeB));
-      background:#111;
-      color:#fff;
-      padding:10px 12px;
-      border-radius:999px;
-      font-size:13px;
-      opacity:0;
-      pointer-events:none;
-      transition:.18s;
-      z-index:60;
-      max-width:min(92vw, 560px);
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .toast.show{opacity:1;}
+.hidden{display:none!important}
 
-    .hide{display:none!important}
+/* editor */
+.input{width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);font-size:16px;font-weight:900}
+.editor{
+  border:1px solid var(--line);border-radius:16px;padding:12px;
+  min-height:46vh;font-size:16px;line-height:1.6;background:#fff;
+}
+.editor{outline:none}
 
-    /* selection mode indicator */
-    .selMode{
-      border:1px solid #111;
-      color:#111;
-      background:#fff;
-    }
+/* bottom toolbar (A案) */
+.bottomBar{
+  position:sticky;bottom:0;z-index:40;
+  background:var(--bg);border-top:1px solid var(--line);
+  padding:10px 14px;
+}
+.bottomBarInner{
+  max-width:980px;margin:0 auto;
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+}
+.tool{
+  border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:900;
+  background:#fff;font-size:13px;
+}
+.tool:active{background:var(--tap)}
+.tool.active{border-color:var(--accent)}
+.hint{margin-left:auto}
 
-    /* small */
-    .kbd{
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 12px;
-      padding: 2px 6px;
-      border:1px solid var(--line);
-      border-radius: 8px;
-      color:#222;
-      background:#fafafa;
-    }
-  </style>
+/* checkbox line */
+.cbline{display:flex;gap:10px;margin:6px 0;align-items:flex-start}
+.cbox{
+  width:24px;height:24px;border:1px solid #bbb;border-radius:6px;
+  display:grid;place-items:center;font-weight:900;flex:0 0 24px;
+  user-select:none;-webkit-user-select:none;
+}
+.cbtext{flex:1;word-break:break-word}
+.cbline.done .cbtext{color:#777;text-decoration:line-through}
+
+/* plain line helper */
+.plainline{min-height:1.2em}
+.zwsp{user-select:none;-webkit-user-select:none}
+
+/* toast */
+.toast{
+  position:fixed;left:50%;bottom:70px;transform:translateX(-50%);
+  background:rgba(0,0,0,.85);color:#fff;padding:10px 14px;
+  border-radius:999px;font-weight:900;font-size:13px;
+  opacity:0;transition:.2s;pointer-events:none;z-index:999;
+}
+.toast.show{opacity:1}
+
+/* drag */
+.dragging{opacity:.6}
+.ghost{
+  outline:2px dashed rgba(0,0,0,.25);
+  border-radius:12px;height:56px;
+}
+
+/* modal */
+.modalBg{
+  position:fixed;inset:0;background:rgba(0,0,0,.35);
+  display:none;align-items:flex-end;justify-content:center;
+  z-index:1000;
+}
+.modalBg.show{display:flex}
+.modal{
+  width:min(980px, 100%);
+  background:#fff;border-radius:18px 18px 0 0;
+  border:1px solid var(--line);
+  box-shadow:0 -12px 32px rgba(0,0,0,.12);
+  padding:14px;
+}
+.modalTitle{font-weight:900;font-size:16px;margin:0 0 10px}
+.modalBtns{display:flex;gap:10px;flex-wrap:wrap}
+.modalBtns .btn{flex:1}
+</style>
 </head>
+
 <body>
-<div class="app" id="app">
-  <div class="topbar">
-    <div class="title" id="topTitle">メモ</div>
-    <div class="right">
-      <span class="badge" id="selBadge" style="display:none;">選択: <b id="selCount">0</b></span>
-      <button class="icon" id="btnNew" title="新規">＋</button>
-      <button class="icon" id="btnExport" title="書き出し">⇪</button>
-      <button class="icon" id="btnImport" title="読み込み">⇩</button>
+<div class="topbar">
+  <div class="brand">
+    <h1>offline-memo-final</h1>
+
+    <!-- 通常メニュー -->
+    <div id="topActionsNormal" class="row">
+      <button id="btnExport" class="btn ghost" type="button">Export</button>
+      <button id="btnImport" class="btn ghost" type="button">Import</button>
+      <button id="btnNew" class="btn" type="button">新規</button>
+    </div>
+
+    <!-- 選択モード -->
+    <div id="topActionsSelect" class="row hidden">
+      <div class="pill" id="selCountPill">選択: 0</div>
+      <button id="btnSelText" class="btn" type="button">テキスト化</button>
+      <button id="btnSelDelete" class="btn danger" type="button">削除</button>
+      <button id="btnSelCancel" class="btn ghost" type="button">解除</button>
     </div>
   </div>
+</div>
 
-  <div class="listWrap" id="listWrap">
-    <div class="searchRow">
-      <input type="text" id="search" placeholder="検索（タイトル/本文）">
-      <button id="btnSelToggle" class="icon" title="複数選択">✓</button>
+<div class="container">
+  <!-- LIST -->
+  <div id="screenList" class="panel">
+    <div class="row">
+      <div>
+        <div style="font-size:20px;font-weight:900">メモ一覧</div>
+        <div class="muted">（端末内のみ保存 / 通信なし）</div>
+      </div>
+      <div class="spacer"></div>
+      <div id="countPill" class="pill">0件</div>
     </div>
 
-    <div class="sectionTitle">★固定 <small id="pinCount"></small></div>
-    <div id="pinList"></div>
+    <input id="elSearch" class="search" placeholder="検索（タイトル・本文）">
 
-    <div class="sectionTitle">更新順 <small id="norCount"></small></div>
-    <div id="norList"></div>
+    <div class="muted" style="margin-top:10px">
+      基本：更新順 / ★固定内も更新順内も ≡長押しで並び替え（検索中は無効）
+      <br>☑ を押すと複数選択モード（全解除で自動終了）
+    </div>
 
-    <div class="empty hide" id="empty">メモがありません</div>
+    <div id="notesEl" class="list"></div>
   </div>
 
-  <!-- editor -->
-  <div class="editorWrap" id="editorWrap">
-    <div class="editTop">
-      <div class="left">
-        <button class="icon" id="btnBack" title="戻る">←</button>
-      </div>
-      <div class="center">
-        <input type="text" id="titleInput" placeholder="タイトル">
-      </div>
-      <div class="right">
-        <button class="icon" id="btnUndo" title="Undo">↶</button>
-        <button class="icon" id="btnRedo" title="Redo">↷</button>
-        <button class="primary" id="btnSave">保存</button>
-        <button class="danger" id="btnDelete">削除</button>
-      </div>
+  <!-- EDIT -->
+  <div id="screenEdit" class="panel hidden">
+    <div class="row" style="margin-bottom:10px">
+      <button id="btnBack" class="btn" type="button">戻る</button>
+      <div class="spacer"></div>
+      <button id="btnUndo" class="btn ghost" type="button">↶</button>
+      <button id="btnRedo" class="btn ghost" type="button">↷</button>
+      <button id="btnDeleteInEdit" class="btn danger" type="button">🗑</button>
+      <button id="btnSave" class="btn primary" type="button">保存</button>
     </div>
 
-    <div class="editorBody">
-      <div class="ce" id="editor" contenteditable="true" spellcheck="false"></div>
-    </div>
+    <input id="elTitle" class="input" placeholder="タイトル">
+    <div id="editor" class="editor" contenteditable="true" spellcheck="false" style="margin-top:10px"></div>
 
-    <div class="bottomBar" id="bottomBar">
-      <div class="group">
-        <button class="icon" id="btnBold" title="太字"><b>B</b></button>
-        <button class="icon" id="btnRed" title="赤字" style="color:#d11;">A</button>
-        <button class="icon" id="btnCb" title="チェック化">☑</button>
-      </div>
-      <div class="grow"></div>
-      <div class="group">
-        <span class="kbd" id="dirtyHint" style="display:none;">未保存</span>
-      </div>
+    <div class="muted" style="margin-top:10px">
+      ※ チェックは閲覧/編集どちらでもON/OFF（保存ボタン押すまで未保存）
     </div>
   </div>
+</div>
 
-  <!-- modals -->
-  <div class="modalOverlay" id="modalOverlay">
-    <div class="modal">
-      <h3 id="modalTitle">確認</h3>
-      <p id="modalText"></p>
-      <div class="row" id="modalBtns"></div>
+<!-- Bottom toolbar -->
+<div id="bottomBar" class="bottomBar hidden">
+  <div class="bottomBarInner">
+    <button id="btnBlack" class="tool active" type="button">黒</button>
+    <button id="btnRed" class="tool" type="button">赤</button>
+    <button id="btnCb" class="tool" type="button">☑ チェック化</button>
+    <div class="spacer"></div>
+    <div id="saveState" class="muted hint">保存済み</div>
+  </div>
+</div>
+
+<input id="fileImport" type="file" class="hidden" multiple accept=".json,.txt,application/json,text/plain">
+<div id="toast" class="toast">OK</div>
+
+<!-- Export modal -->
+<div id="exportModalBg" class="modalBg">
+  <div class="modal">
+    <div class="modalTitle">Export</div>
+    <div class="muted" style="margin-bottom:10px">
+      ・バックアップ：全データを .json<br>
+      ・テキスト化：選択中のメモ → 1件なら .txt / 複数なら .zip
+    </div>
+    <div class="modalBtns">
+      <button id="btnDoBackup" class="btn primary" type="button">バックアップ（.json）</button>
+      <button id="btnDoText" class="btn" type="button">テキスト化（.txt / .zip）</button>
+      <button id="btnModalCancel" class="btn ghost" type="button">キャンセル</button>
     </div>
   </div>
+</div>
 
-  <div class="toast" id="toast"></div>
-
-  <input type="file" id="filePicker" class="hide" multiple>
+<!-- Update modal -->
+<div id="updateModalBg" class="modalBg">
+  <div class="modal">
+    <div class="modalTitle">更新があります</div>
+    <div class="muted" style="margin-bottom:10px">
+      再起動すると最新版が反映されます（未保存は消えます）。
+    </div>
+    <div class="modalBtns">
+      <button id="btnReloadNow" class="btn primary" type="button">再起動する</button>
+      <button id="btnReloadLater" class="btn ghost" type="button">あとで</button>
+    </div>
+  </div>
 </div>
 
 <script>
 /* =========================
-   offline-memo-final v7
-   STORAGE_KEY: offline_memo_final_v7
+   offline-memo-final v7 (backup1 stabilized)
+   - cbline Enter根治：beforeinput + 先頭Enter例外
+   - cbline解除：Backspace/Delete（Gboardはbeforeinputが本命）
    ========================= */
+
 const STORAGE_KEY = "offline_memo_final_v7";
+const ZWSP = "\u200B";
 
-/* ===== helpers ===== */
-const $ = (id)=>document.getElementById(id);
-const app = $("app");
-const listWrap = $("listWrap");
-const pinList = $("pinList");
-const norList = $("norList");
-const emptyEl = $("empty");
-const searchEl = $("search");
-const btnNew = $("btnNew");
-const btnExport = $("btnExport");
-const btnImport = $("btnImport");
-const btnSelToggle = $("btnSelToggle");
-const selBadge = $("selBadge");
-const selCount = $("selCount");
-const pinCount = $("pinCount");
-const norCount = $("norCount");
-const topTitle = $("topTitle");
-
-const editorWrap = $("editorWrap");
-const btnBack = $("btnBack");
-const titleInput = $("titleInput");
-const editor = $("editor");
-const btnUndo = $("btnUndo");
-const btnRedo = $("btnRedo");
-const btnSave = $("btnSave");
-const btnDelete = $("btnDelete");
-const btnBold = $("btnBold");
-const btnRed = $("btnRed");
-const btnCb = $("btnCb");
-const dirtyHint = $("dirtyHint");
-
-const modalOverlay = $("modalOverlay");
-const modalTitle = $("modalTitle");
-const modalText = $("modalText");
-const modalBtns = $("modalBtns");
-const toastEl = $("toast");
-const filePicker = $("filePicker");
-
+/* utils */
 function nowTs(){ return Date.now(); }
-function fmtTs(ts){
+function pad2(n){ return String(n).padStart(2,"0"); }
+function fmt(ts){
   const d = new Date(ts);
-  const pad = (n)=>String(n).padStart(2,"0");
-  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function stampForFile(){
+  const d = new Date();
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+function uid(){
+  return "n_" + Math.random().toString(36).slice(2,10) + "_" + Date.now().toString(36);
+}
+function safeParse(json, fallback){
+  try{ return JSON.parse(json); }catch(_){ return fallback; }
+}
+function stripTags(html){
+  const div = document.createElement("div");
+  div.innerHTML = html || "";
+  return (div.textContent || "").replace(/\s+/g," ").trim();
 }
 function escapeHtml(s){
-  return (s||"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  return (s||"").replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
-function toast(msg, ms=1400){
-  toastEl.textContent = msg;
-  toastEl.classList.add("show");
-  clearTimeout(toastEl._t);
-  toastEl._t = setTimeout(()=>toastEl.classList.remove("show"), ms);
-}
-
-function openModal({title="確認", text="", buttons=[]}){
-  modalTitle.textContent = title;
-  modalText.textContent = text;
-  modalBtns.innerHTML = "";
-  buttons.forEach(b=>{
-    const bt = document.createElement("button");
-    bt.textContent = b.text;
-    bt.className = b.className || "";
-    bt.addEventListener("click", ()=>{
-      closeModal();
-      b.onClick && b.onClick();
-    });
-    modalBtns.appendChild(bt);
+function htmlToText(html){
+  const div = document.createElement("div");
+  div.innerHTML = html || "";
+  div.querySelectorAll(".cbline").forEach(line=>{
+    const done = line.getAttribute("data-done")==="true";
+    const t = (line.querySelector(".cbtext")?.textContent || line.textContent || "").trim();
+    line.replaceWith((done ? "☑ " : "☐ ") + t);
   });
-  modalOverlay.classList.add("show");
-}
-function closeModal(){
-  modalOverlay.classList.remove("show");
+  return (div.textContent || "").replace(/\u200B/g,"").replace(/\r/g,"").trim();
 }
 
-function downloadBlob(filename, blob){
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=>URL.revokeObjectURL(a.href), 8000);
-}
-
-function normalizeTitle(t){
-  t = (t||"").trim();
-  return t ? t : "無題";
-}
-function makeSafeFilename(name){
-  return (name||"無題")
-    .replace(/[\\\/:*?"<>|]/g, "_")
-    .replace(/\s+/g," ")
-    .trim() || "無題";
-}
-
-/* ===== state ===== */
-let state = {
-  memos: [],          // {id,title,html,updatedAt,createdAt,pinned}
-  pinnedIds: [],      // pinned order
-  normalOrderIds: [], // manual order for non-pinned
-};
-let view = {
-  query: "",
-  selecting: false,
-  selected: new Set(), // ids
-  editingId: null,
-  dirty: false,
-  lastSavedSnapshot: null,
-  undoStack: [],
-  redoStack: [],
-};
-
-function saveState(){
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-function loadState(){
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return;
-  try{
-    const obj = JSON.parse(raw);
-    if (obj && typeof obj === "object"){
-      state = {
-        memos: Array.isArray(obj.memos) ? obj.memos : [],
-        pinnedIds: Array.isArray(obj.pinnedIds) ? obj.pinnedIds : [],
-        normalOrderIds: Array.isArray(obj.normalOrderIds) ? obj.normalOrderIds : [],
-      };
-    }
-  }catch(e){}
-}
-
-function genId(){
-  return "m" + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
-}
-
-function getMemoById(id){ return state.memos.find(m=>m.id===id) || null; }
-function isPinned(id){
-  const m = getMemoById(id);
-  return !!(m && m.pinned);
-}
-function setPinned(id, pinned){
-  const m = getMemoById(id);
-  if (!m) return;
-  m.pinned = !!pinned;
-  if (m.pinned){
-    // remove from normal order
-    state.normalOrderIds = state.normalOrderIds.filter(x=>x!==id);
-    // add to pinned order top if not exists
-    if (!state.pinnedIds.includes(id)) state.pinnedIds.unshift(id);
-  }else{
-    state.pinnedIds = state.pinnedIds.filter(x=>x!==id);
-    // normal order: keep manual order, if not exists push to head
-    if (!state.normalOrderIds.includes(id)) state.normalOrderIds.unshift(id);
-  }
-}
-
-function getSortedPinned(){
-  const pinned = state.memos.filter(m=>m.pinned);
-  // order by pinnedIds, fallback by updatedAt desc
-  const map = new Map(pinned.map(m=>[m.id,m]));
-  const arr = [];
-  state.pinnedIds.forEach(id=>{
-    const m = map.get(id);
-    if (m){ arr.push(m); map.delete(id); }
-  });
-  const rest = [...map.values()].sort((a,b)=>b.updatedAt-a.updatedAt);
-  return arr.concat(rest);
-}
-function getSortedNormal(){
-  const normal = state.memos.filter(m=>!m.pinned);
-  const map = new Map(normal.map(m=>[m.id,m]));
-  const arr = [];
-  state.normalOrderIds.forEach(id=>{
-    const m = map.get(id);
-    if (m){ arr.push(m); map.delete(id); }
-  });
-  // the rest by updatedAt desc
-  const rest = [...map.values()].sort((a,b)=>b.updatedAt-a.updatedAt);
-  return arr.concat(rest);
-}
-
-function applySearch(list){
-  const q = view.query.trim().toLowerCase();
-  if (!q) return list;
-  return list.filter(m=>{
-    const t = (m.title||"").toLowerCase();
-    const body = (m.html||"").toLowerCase();
-    return t.includes(q) || body.includes(q);
-  });
-}
-
-/* ===== render list ===== */
-function renderList(){
-  const pinned = applySearch(getSortedPinned());
-  const normal = applySearch(getSortedNormal());
-
-  pinList.innerHTML = "";
-  norList.innerHTML = "";
-
-  pinCount.textContent = pinned.length ? `(${pinned.length})` : "";
-  norCount.textContent = normal.length ? `(${normal.length})` : "";
-
-  const total = pinned.length + normal.length;
-  emptyEl.classList.toggle("hide", total !== 0);
-
-  pinned.forEach(m=>pinList.appendChild(renderMemoCard(m, true)));
-  normal.forEach(m=>norList.appendChild(renderMemoCard(m, false)));
-
-  updateSelUI();
-}
-
-function getSnippetFromHtml(html){
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html || "";
-  const txt = (tmp.textContent || "").trim().replace(/\s+/g," ");
-  return txt;
-}
-
-function renderMemoCard(m, pinnedSection){
-  const card = document.createElement("div");
-  card.className = "memoCard";
-  card.dataset.id = m.id;
-
-  const left = document.createElement("div");
-  left.className = "left";
-
-  const t = document.createElement("p");
-  t.className = "t";
-  t.textContent = normalizeTitle(m.title);
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.innerHTML = `<span>更新: ${fmtTs(m.updatedAt)}</span><span>作成: ${fmtTs(m.createdAt)}</span>`;
-
-  const snip = document.createElement("div");
-  snip.className = "snippet";
-  snip.textContent = getSnippetFromHtml(m.html).slice(0, 160);
-
-  left.appendChild(t);
-  left.appendChild(meta);
-  left.appendChild(snip);
-
-  const actions = document.createElement("div");
-  actions.className = "actions";
-
-  const pin = document.createElement("button");
-  pin.className = "pinBtn" + (m.pinned ? " pinned" : "");
-  pin.textContent = m.pinned ? "★" : "☆";
-  pin.title = "固定/解除";
-  pin.addEventListener("click", (ev)=>{
-    ev.stopPropagation();
-    setPinned(m.id, !m.pinned);
-    saveState();
-    renderList();
-  });
-
-  const drag = document.createElement("div");
-  drag.className = "dragHandle";
-  drag.textContent = "≡";
-  drag.title = "長押しドラッグ";
-  // 検索中は無効
-  drag.style.opacity = view.query.trim() ? "0.3" : "1.0";
-  drag.style.pointerEvents = view.query.trim() ? "none" : "auto";
-
-  // selection checkbox button for multi-select
-  const selBtn = document.createElement("button");
-  selBtn.className = "icon";
-  selBtn.textContent = view.selected.has(m.id) ? "✓" : " ";
-  selBtn.title = "選択";
-  selBtn.addEventListener("click", (ev)=>{
-    ev.stopPropagation();
-    if (!view.selecting) startSelecting();
-    toggleSelected(m.id);
-  });
-
-  actions.appendChild(selBtn);
-  actions.appendChild(pin);
-  actions.appendChild(drag);
-
-  card.appendChild(left);
-  card.appendChild(actions);
-
-  card.addEventListener("click", ()=>{
-    if (view.selecting){
-      toggleSelected(m.id);
-      return;
-    }
-    openEditor(m.id);
-  });
-
-  enableDragReorder(drag, card, pinnedSection);
-
-  return card;
-}
-
-/* ===== multi select ===== */
-function startSelecting(){
-  view.selecting = true;
-  view.selected = new Set();
-  updateSelUI();
-}
-function stopSelecting(){
-  view.selecting = false;
-  view.selected = new Set();
-  updateSelUI();
-}
-function toggleSelected(id){
-  if (view.selected.has(id)){
-    view.selected.delete(id);
-  }else{
-    view.selected.add(id);
-  }
-  if (view.selected.size === 0){
-    stopSelecting();
-  }else{
-    updateSelUI();
-  }
-  renderList();
-}
-function updateSelUI(){
-  const n = view.selected.size;
-  selBadge.style.display = view.selecting ? "" : "none";
-  selCount.textContent = String(n);
-  btnSelToggle.classList.toggle("selMode", view.selecting);
-}
-
-/* ===== drag reorder ===== */
-let dragState = null;
-
-function enableDragReorder(handle, card, pinnedSection){
-  let pressTimer = null;
-  let startY = 0;
-
-  const onPointerDown = (e)=>{
-    if (view.query.trim()) return; // search中は無効
-    if (view.selecting) return;    // selection中は無効（誤操作防止）
-    e.preventDefault();
-    startY = e.clientY;
-    pressTimer = setTimeout(()=>{
-      beginDrag(e, handle, card, pinnedSection);
-    }, 240);
-  };
-  const onPointerMove = (e)=>{
-    if (!pressTimer) return;
-    const dy = Math.abs(e.clientY - startY);
-    if (dy > 8){
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  };
-  const onPointerUp = ()=>{
-    if (pressTimer){
-      clearTimeout(pressTimer);
-      pressTimer = null;
-    }
-  };
-
-  handle.addEventListener("pointerdown", onPointerDown);
-  window.addEventListener("pointermove", onPointerMove);
-  window.addEventListener("pointerup", onPointerUp);
-}
-
-function beginDrag(e, handle, card, pinnedSection){
-  const listEl = pinnedSection ? pinList : norList;
-  const ids = pinnedSection ? state.pinnedIds : state.normalOrderIds;
-
-  // ensure ids contains all current items in view (only when not searching)
-  const current = [...listEl.querySelectorAll(".memoCard")].map(x=>x.dataset.id);
-  current.forEach(id=>{
-    if (!ids.includes(id)) ids.push(id);
-  });
-
-  dragState = {
-    pinnedSection,
-    listEl,
-    ids,
-    draggingId: card.dataset.id,
-    startY: e.clientY,
-    placeholder: document.createElement("div"),
-    cardRect: card.getBoundingClientRect(),
-    ghost: card.cloneNode(true),
-  };
-
-  const ph = dragState.placeholder;
-  ph.style.height = dragState.cardRect.height + "px";
-  ph.style.marginBottom = "10px";
-  ph.style.border = "1px dashed #bbb";
-  ph.style.borderRadius = "16px";
-  ph.style.background = "#fafafa";
-
-  card.parentNode.insertBefore(ph, card.nextSibling);
-
-  const g = dragState.ghost;
-  g.style.position = "fixed";
-  g.style.left = dragState.cardRect.left + "px";
-  g.style.top = dragState.cardRect.top + "px";
-  g.style.width = dragState.cardRect.width + "px";
-  g.style.zIndex = "999";
-  g.style.pointerEvents = "none";
-  g.style.opacity = "0.92";
-  g.style.boxShadow = "0 10px 30px rgba(0,0,0,.18)";
-  g.style.border = "1px solid #ddd";
-  document.body.appendChild(g);
-
-  card.style.visibility = "hidden";
-
-  window.addEventListener("pointermove", onDragMove, {passive:false});
-  window.addEventListener("pointerup", onDragEnd, {passive:false});
-}
-
-function onDragMove(e){
-  if (!dragState) return;
-  e.preventDefault();
-
-  const dy = e.clientY - dragState.startY;
-  const g = dragState.ghost;
-  g.style.transform = `translateY(${dy}px)`;
-
-  const cards = [...dragState.listEl.querySelectorAll(".memoCard")].filter(c=>c.dataset.id !== dragState.draggingId);
-  const y = e.clientY;
-
-  let insertBefore = null;
-  for (const c of cards){
-    const r = c.getBoundingClientRect();
-    if (y < r.top + r.height/2){
-      insertBefore = c;
-      break;
-    }
-  }
-  if (insertBefore){
-    dragState.listEl.insertBefore(dragState.placeholder, insertBefore);
-  }else{
-    dragState.listEl.appendChild(dragState.placeholder);
-  }
-}
-
-function onDragEnd(e){
-  if (!dragState) return;
-  e.preventDefault();
-
-  window.removeEventListener("pointermove", onDragMove);
-  window.removeEventListener("pointerup", onDragEnd);
-
-  const listEl = dragState.listEl;
-  const cardsInOrder = [...listEl.querySelectorAll(".memoCard, div")];
-  // placeholder位置を使い、並びを確定
-  const orderedIds = [];
-  for (const node of listEl.children){
-    if (node.classList && node.classList.contains("memoCard")){
-      orderedIds.push(node.dataset.id);
-    }else if (node === dragState.placeholder){
-      orderedIds.push(dragState.draggingId);
-    }
-  }
-
-  if (dragState.pinnedSection){
-    state.pinnedIds = orderedIds;
-  }else{
-    state.normalOrderIds = orderedIds;
-  }
-
-  saveState();
-  renderList();
-
-  // cleanup
-  dragState.ghost.remove();
-  dragState.placeholder.remove();
-  dragState = null;
-}
-
-/* ===== editor lines builder ===== */
+/* plainline（空行も必ずカーソル置ける形に統一） */
 function makePlainLine(text=""){
-  const d = document.createElement("div");
-  d.className = "line plainline";
-  d.innerHTML = escapeHtml(text);
-  return d;
-}
-function makeCbLine(text=""){
-  const row = document.createElement("div");
-  row.className = "line cbline";
-  const box = document.createElement("span");
-  box.className = "cbbox";
-  box.textContent = "";
-  const tx = document.createElement("div");
-  tx.className = "cbtext";
-  tx.contentEditable = "true";
-  tx.spellcheck = false;
-  tx.innerHTML = escapeHtml(text);
-  row.appendChild(box);
-  row.appendChild(tx);
-  box.addEventListener("click", (ev)=>{
-    ev.stopPropagation();
-    row.classList.toggle("checked");
-    updateDirtyFlag();
-    schedulePushSnapshot();
-  });
-  return row;
-}
-
-function ensureLinesStructure(){
-  // editor内を line ブロックに整形
-  const children = [...editor.childNodes];
-  if (children.length === 0){
-    editor.appendChild(makePlainLine(""));
-    return;
+  const div = document.createElement("div");
+  div.className = "plainline";
+  if (text && text.length){
+    div.textContent = text;
+  }else{
+    div.innerHTML = `<span class="zwsp">${ZWSP}</span><br>`;
   }
-  // if plain text nodes exist, wrap them
-  children.forEach(ch=>{
-    if (ch.nodeType === 3){
-      const t = ch.textContent || "";
-      const lines = t.split(/\r?\n/);
-      const frag = document.createDocumentFragment();
-      lines.forEach((ln,i)=>{
-        frag.appendChild(makePlainLine(ln));
-      });
-      editor.replaceChild(frag, ch);
-    }else if (ch.nodeType === 1){
-      const el = ch;
-      if (!el.classList.contains("line")){
-        // convert div/p into line
-        const txt = (el.textContent || "");
-        const nl = makePlainLine(txt);
-        editor.replaceChild(nl, el);
-      }
-    }
-  });
+  return div;
 }
 
+/* caret */
 function setCaretToStart(el){
-  function setCaretToStart(el){
+  const sel = window.getSelection();
+  if (!sel) return;
   const r = document.createRange();
   r.selectNodeContents(el);
   r.collapse(true);
-  const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(r);
 }
 function setCaretToEnd(el){
+  const sel = window.getSelection();
+  if (!sel) return;
   const r = document.createRange();
   r.selectNodeContents(el);
   r.collapse(false);
-  const sel = window.getSelection();
   sel.removeAllRanges();
   sel.addRange(r);
 }
 
-function focusToPlainlineStart(pl){
-  requestAnimationFrame(()=>{
-    editor.focus();
-    setCaretToStart(pl);
+/* toast */
+const toastEl = document.getElementById("toast");
+let toastTimer=null;
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1200);
+}
+
+/* DOM refs */
+const screenList = document.getElementById("screenList");
+const screenEdit = document.getElementById("screenEdit");
+const bottomBar = document.getElementById("bottomBar");
+
+const topActionsNormal = document.getElementById("topActionsNormal");
+const topActionsSelect = document.getElementById("topActionsSelect");
+const selCountPill = document.getElementById("selCountPill");
+const btnSelDelete = document.getElementById("btnSelDelete");
+const btnSelCancel = document.getElementById("btnSelCancel");
+const btnSelText = document.getElementById("btnSelText");
+
+const btnNew = document.getElementById("btnNew");
+const btnExport = document.getElementById("btnExport");
+const btnImport = document.getElementById("btnImport");
+const fileImport = document.getElementById("fileImport");
+
+const countPill = document.getElementById("countPill");
+const elSearch = document.getElementById("elSearch");
+const notesEl = document.getElementById("notesEl");
+
+const btnBack = document.getElementById("btnBack");
+const btnSave = document.getElementById("btnSave");
+const btnDeleteInEdit = document.getElementById("btnDeleteInEdit");
+const btnUndo = document.getElementById("btnUndo");
+const btnRedo = document.getElementById("btnRedo");
+
+const elTitle = document.getElementById("elTitle");
+const editor = document.getElementById("editor");
+const saveState = document.getElementById("saveState");
+const btnBlack = document.getElementById("btnBlack");
+const btnRed = document.getElementById("btnRed");
+const btnCb = document.getElementById("btnCb");
+
+/* modals */
+const exportModalBg = document.getElementById("exportModalBg");
+const btnDoBackup = document.getElementById("btnDoBackup");
+const btnDoText = document.getElementById("btnDoText");
+const btnModalCancel = document.getElementById("btnModalCancel");
+
+const updateModalBg = document.getElementById("updateModalBg");
+const btnReloadNow = document.getElementById("btnReloadNow");
+const btnReloadLater = document.getElementById("btnReloadLater");
+/* store */
+function normalizeStore(s){
+  if (!s || typeof s !== "object") s = {};
+  if (!Array.isArray(s.notes)) s.notes = [];
+  if (!Array.isArray(s.pinnedIds)) s.pinnedIds = [];
+  if (!Array.isArray(s.normalOrderIds)) s.normalOrderIds = [];
+
+  const t = nowTs();
+  s.notes.forEach((n)=>{
+    if (!n.id) n.id = uid();
+    if (typeof n.title !== "string") n.title = "";
+    if (typeof n.bodyHtml !== "string") n.bodyHtml = "";
+    if (typeof n.createdAt !== "number") n.createdAt = t;
+    if (typeof n.updatedAt !== "number") n.updatedAt = t;
+  });
+
+  const set = new Set(s.notes.map(n=>n.id));
+  s.pinnedIds = s.pinnedIds.filter(id=>set.has(id));
+  s.normalOrderIds = s.normalOrderIds.filter(id=>set.has(id) && !s.pinnedIds.includes(id));
+
+  if (s.normalOrderIds.length === 0){
+    s.normalOrderIds = s.notes
+      .filter(n=>!s.pinnedIds.includes(n.id))
+      .sort((a,b)=>b.updatedAt-a.updatedAt)
+      .map(n=>n.id);
+  }
+  return s;
+}
+function loadStore(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return normalizeStore(safeParse(raw, {notes:[], pinnedIds:[], normalOrderIds:[]}));
+}
+function saveStore(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+}
+let store = loadStore();
+
+function getNote(id){ return store.notes.find(n=>n.id===id) || null; }
+function ensureAtLeastOne(){
+  if (store.notes.length) return;
+  const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
+  store.notes.push(n);
+  store.normalOrderIds = [n.id];
+  saveStore();
+}
+function isPinned(id){ return store.pinnedIds.includes(id); }
+function pinToggle(id){
+  if (isPinned(id)){
+    store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
+    store.normalOrderIds.unshift(id);
+  }else{
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==id);
+    store.pinnedIds = store.pinnedIds.filter(x=>x!==id);
+    store.pinnedIds.unshift(id);
+  }
+}
+
+/* selection mode */
+let selectionMode = false;
+let selectedIds = new Set();
+
+function updateTopActions(){
+  if (selectionMode){
+    topActionsNormal.classList.add("hidden");
+    topActionsSelect.classList.remove("hidden");
+    selCountPill.textContent = `選択: ${selectedIds.size}`;
+    btnSelDelete.disabled = selectedIds.size === 0;
+    btnSelText.disabled = selectedIds.size === 0;
+  }else{
+    topActionsSelect.classList.add("hidden");
+    topActionsNormal.classList.remove("hidden");
+  }
+}
+
+function setSelectionMode(on){
+  selectionMode = !!on;
+  if (!selectionMode) selectedIds.clear();
+  updateTopActions();
+  renderList();
+}
+
+function toggleSelected(id){
+  if (!selectionMode) selectionMode = true;
+
+  if (selectedIds.has(id)) selectedIds.delete(id);
+  else selectedIds.add(id);
+
+  if (selectedIds.size === 0){
+    selectionMode = false;
+  }
+  updateTopActions();
+  renderList();
+}
+
+btnSelCancel.addEventListener("click", ()=> setSelectionMode(false));
+btnSelDelete.addEventListener("click", ()=>{
+  if (selectedIds.size === 0) return;
+  deleteNotes(Array.from(selectedIds));
+});
+
+/* UI state */
+let currentId=null;
+let dirty=false;
+let savedTitle="", savedHtml="";
+let draftTitle="", draftHtml="";
+let openedByNew=false;
+
+/* dirty */
+function updateDirtyFlag(){
+  dirty = (draftTitle !== savedTitle) || (draftHtml !== savedHtml);
+  saveState.textContent = dirty ? "未保存" : "保存済み";
+}
+
+/* screen */
+function showList(){
+  screenEdit.classList.add("hidden");
+  bottomBar.classList.add("hidden");
+  screenList.classList.remove("hidden");
+
+  currentId = null;
+  dirty = false;
+  openedByNew = false;
+
+  renderList();
+  history.replaceState({screen:"list"}, "");
+}
+
+/* heading */
+function addHeadingToFrag(frag, text){
+  const lab = document.createElement("div");
+  lab.className = "sectionLabel";
+  lab.textContent = text;
+  frag.appendChild(lab);
+}
+
+/* list builder */
+function buildList(){
+  const q = (elSearch.value||"").trim().toLowerCase();
+  const notes = store.notes.slice();
+  const byId = new Map(notes.map(n=>[n.id,n]));
+
+  let pinned = store.pinnedIds.map(id=>byId.get(id)).filter(Boolean);
+  let normalIds = store.normalOrderIds.filter(id=>!store.pinnedIds.includes(id) && byId.has(id));
+  let normal = normalIds.map(id=>byId.get(id)).filter(Boolean);
+
+  if (q){
+    const filtered = notes.filter(n=>{
+      const t = (n.title||"").toLowerCase();
+      const b = stripTags(n.bodyHtml||"").toLowerCase();
+      return t.includes(q) || b.includes(q);
+    });
+    const filteredSet = new Set(filtered.map(n=>n.id));
+    pinned = pinned.filter(n=>filteredSet.has(n.id));
+    normal = filtered.filter(n=>!store.pinnedIds.includes(n.id)).sort((a,b)=>b.updatedAt-a.updatedAt);
+    return { pinned, normal, searching:true };
+  }
+  return { pinned, normal, searching:false };
+}
+
+/* row */
+function renderRow(note, searching){
+  const row = document.createElement("div");
+  row.className = "rowCompact";
+  row.dataset.id = note.id;
+  if (selectedIds.has(note.id)) row.classList.add("selected");
+
+  const left = document.createElement("div");
+  left.className = "rowLeft";
+
+  const title = document.createElement("div");
+  title.className = "rowTitle";
+  title.textContent = (note.title||"").trim() ? note.title : "（無題）";
+
+  const meta = document.createElement("div");
+  meta.className = "rowMeta";
+  meta.textContent = `更新: ${fmt(note.updatedAt)}`;
+
+  left.append(title, meta);
+
+  const actions = document.createElement("div");
+  actions.className = "rowActions";
+
+  const selBtn = document.createElement("button");
+  selBtn.className = "miniBtn";
+  selBtn.type="button";
+  selBtn.textContent = selectedIds.has(note.id) ? "☑" : "☐";
+  selBtn.title = "複数選択";
+
+  const dragBtn = document.createElement("button");
+  dragBtn.className = "miniBtn";
+  dragBtn.type="button";
+  dragBtn.textContent = "≡";
+  dragBtn.title = "長押しで並び替え";
+
+  const starBtn = document.createElement("button");
+  starBtn.className = "miniBtn";
+  starBtn.type="button";
+  starBtn.textContent = isPinned(note.id) ? "★" : "☆";
+  starBtn.title = "固定";
+
+  const delBtn = document.createElement("button");
+  delBtn.className = "miniBtn danger";
+  delBtn.type="button";
+  delBtn.textContent = "🗑";
+  delBtn.title = "削除";
+
+  actions.append(selBtn, dragBtn, starBtn, delBtn);
+  row.append(left, actions);
+
+  row.addEventListener("click", ()=>{
+    if (selectionMode){
+      toggleSelected(note.id);
+      return;
+    }
+    openNote(note.id, false);
+  });
+
+  selBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    toggleSelected(note.id);
+  });
+
+  starBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    pinToggle(note.id);
+    saveStore();
+    renderList();
+    toast(isPinned(note.id) ? "固定しました" : "固定を解除しました");
+  });
+
+  delBtn.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    if (!confirm("削除しますか？")) return;
+    deleteNotes([note.id]);
+  });
+
+  if (!searching && !selectionMode){
+    attachManualDrag(dragBtn, row, note);
+  }else{
+    dragBtn.classList.add("dim");
+  }
+
+  return row;
+}
+/* render list */
+function renderList(){
+  countPill.textContent = `${store.notes.length}件`;
+
+  const { pinned, normal, searching } = buildList();
+  notesEl.innerHTML = "";
+
+  const frag = document.createDocumentFragment();
+
+  if (pinned.length){
+    addHeadingToFrag(frag, "★ 固定");
+    pinned.forEach(n=> frag.appendChild(renderRow(n, searching)));
+  }
+  addHeadingToFrag(frag, "更新順");
+
+  if (!normal.length){
+    const m = document.createElement("div");
+    m.className = "muted";
+    m.style.padding = "6px 2px";
+    m.textContent = searching ? "一致するメモがありません" : "メモがありません（右上の新規から作成）";
+    frag.appendChild(m);
+  }else{
+    normal.forEach(n=> frag.appendChild(renderRow(n, searching)));
+  }
+
+  notesEl.appendChild(frag);
+  updateTopActions();
+}
+
+/* open */
+function openNote(id, isNew){
+  const note = getNote(id);
+  if (!note){ toast("メモが見つかりません"); return; }
+
+  currentId = id;
+  openedByNew = !!isNew;
+
+  draftTitle = note.title || "";
+  draftHtml  = note.bodyHtml || "";
+  savedTitle = draftTitle;
+  savedHtml  = draftHtml;
+
+  elTitle.value = draftTitle;
+  editor.innerHTML = draftHtml || "";
+  normalizeCbLines(editor);
+
+  screenList.classList.add("hidden");
+  screenEdit.classList.remove("hidden");
+  bottomBar.classList.remove("hidden");
+
+  resetUndoRedo();
+  updateDirtyFlag();
+
+  if (openedByNew) setTimeout(()=> elTitle.focus(), 0);
+  else setTimeout(()=> editor.focus(), 0);
+
+  history.pushState({screen:"edit", id: currentId}, "");
+}
+
+/* delete helper */
+function deleteNotes(ids){
+  const uniq = Array.from(new Set(ids)).filter(Boolean);
+  if (!uniq.length) return;
+
+  if (uniq.length >= 2){
+    if (!confirm(`${uniq.length}件を削除しますか？`)) return;
+  }
+
+  store.notes = store.notes.filter(n=>!uniq.includes(n.id));
+  store.pinnedIds = store.pinnedIds.filter(id=>!uniq.includes(id));
+  store.normalOrderIds = store.normalOrderIds.filter(id=>!uniq.includes(id));
+  ensureAtLeastOne();
+  saveStore();
+
+  selectionMode = false;
+  selectedIds.clear();
+  updateTopActions();
+
+  renderList();
+  toast("削除しました");
+}
+
+/* list events */
+elSearch.addEventListener("input", ()=> renderList());
+
+btnNew.addEventListener("click", ()=>{
+  const n = { id: uid(), title:"", bodyHtml:"", createdAt: nowTs(), updatedAt: nowTs() };
+  store.notes.unshift(n);
+
+  store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+  store.normalOrderIds.unshift(n.id);
+
+  saveStore();
+  renderList();
+  openNote(n.id, true);
+
+  draftTitle = "";
+  draftHtml = "";
+  savedTitle = "";
+  savedHtml = "";
+  elTitle.value = "";
+  editor.innerHTML = "";
+  updateDirtyFlag();
+  resetUndoRedo();
+});
+
+/* =========================
+   editor / checkbox / undo / save
+   ========================= */
+
+function cleanHtml(html){
+  // stray <div><br></div> を plainlineに統一（強め）
+  const safe = (html||"");
+  return safe
+    .replace(/<div><br><\/div>/gi, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`)
+    .replace(/<div class="plainline"><br><\/div>/gi, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`)
+    .replace(/<div class="plainline">\u200B<\/div>/g, `<div class="plainline"><span class="zwsp">${ZWSP}<\/span><br><\/div>`);
+}
+
+/* checkbox helpers */
+function normalizeCbLines(root){
+  root.querySelectorAll(".cbline").forEach(line=>{
+    const done = line.getAttribute("data-done") === "true";
+    line.classList.toggle("done", done);
+    const box = line.querySelector(".cbox");
+    if (box) box.textContent = done ? "☑" : "☐";
   });
 }
+function toggleCbLine(line){
+  const done = line.getAttribute("data-done") === "true";
+  const next = !done;
+  line.setAttribute("data-done", next ? "true" : "false");
+  line.classList.toggle("done", next);
+  const box = line.querySelector(".cbox");
+  if (box) box.textContent = next ? "☑" : "☐";
+}
 
-/* ===== checkbox logic ===== */
-function getCurrentLineEl(){
+/* sync draft */
+function syncDraftFromCurrent(){
+  draftTitle = elTitle.value || "";
+  draftHtml = cleanHtml(editor.innerHTML);
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(editor);
+  updateDirtyFlag();
+}
+
+/* Undo/Redo */
+let undoStack = [];
+let redoStack = [];
+const UNDO_LIMIT = 80;
+let pushTimer = null;
+
+function refreshUndoButtons(){
+  btnUndo.disabled = undoStack.length <= 1;
+  btnRedo.disabled = redoStack.length === 0;
+}
+function pushUndoSnapshot(){
+  const snap = { title: (elTitle.value||""), html: cleanHtml(editor.innerHTML) };
+  const last = undoStack[undoStack.length-1];
+  if (last && last.title===snap.title && last.html===snap.html) return;
+  undoStack.push(snap);
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  refreshUndoButtons();
+}
+function schedulePushSnapshot(){
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(()=> pushUndoSnapshot(), 200);
+}
+function resetUndoRedo(){
+  undoStack = [];
+  redoStack = [];
+  undoStack.push({title:(elTitle.value||""), html: cleanHtml(editor.innerHTML)});
+  refreshUndoButtons();
+}
+
+btnUndo.addEventListener("click", ()=>{
+  if (undoStack.length <= 1) return;
+  redoStack.push({ title:(elTitle.value||""), html: cleanHtml(editor.innerHTML) });
+  undoStack.pop();
+  const prev = undoStack[undoStack.length-1];
+
+  draftTitle = prev.title;
+  draftHtml  = prev.html;
+
+  elTitle.value = draftTitle;
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(editor);
+
+  updateDirtyFlag();
+  refreshUndoButtons();
+});
+btnRedo.addEventListener("click", ()=>{
+  if (redoStack.length === 0) return;
+  const next = redoStack.pop();
+  undoStack.push({ title: next.title, html: next.html });
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+
+  draftTitle = next.title;
+  draftHtml  = next.html;
+
+  elTitle.value = draftTitle;
+  editor.innerHTML = draftHtml;
+  normalizeCbLines(editor);
+
+  updateDirtyFlag();
+  refreshUndoButtons();
+});
+
+/* checkbox click */
+editor.addEventListener("click", (e)=>{
+  const box = e.target.closest && e.target.closest(".cbox");
+  const line = e.target.closest && e.target.closest(".cbline");
+  if (line && box){
+    pushUndoSnapshot();
+    toggleCbLine(line);
+    draftHtml = cleanHtml(editor.innerHTML);
+    updateDirtyFlag();
+    schedulePushSnapshot();
+  }
+});
+
+/* ---- Enter 根治 + Backspace/Deleteでチェック解除（Gboard対策込み） ---- */
+/* ===== POST-CHECK FIX (Gboard: 直後だけキャレットが壊れる対策) ===== */
+let postCbFix = null;
+
+function armPostCbFix(pl){
+  // チェック化直後の「次行plainline」を記憶
+  postCbFix = { pl, at: performance.now() };
+}
+
+function runPostCbFix(){
+  if (!postCbFix) return;
+
+  // 直後だけ（短時間）有効にする
+  if ((performance.now() - postCbFix.at) > 800){
+    postCbFix = null;
+    return;
+  }
+
+  const pl = postCbFix.pl;
+  if (!pl || !document.contains(pl)) return;
+
+  // “最初の1打”でズレても戻す
+  editor.focus();
+  setCaretToStart(pl);
+}
+function getCaretOffsetInElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return null;
-  let node = sel.getRangeAt(0).startContainer;
-  if (!node) return null;
-  if (node.nodeType === 3) node = node.parentNode;
-  if (!node) return null;
-  const line = node.closest ? node.closest(".line") : null;
-  return line;
+  const range = sel.getRangeAt(0);
+  if (!el.contains(range.startContainer)) return null;
+
+  const pre = range.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.startContainer, range.startOffset);
+  return pre.toString().length;
 }
 
-function getSelectionText(){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return "";
-  return sel.toString();
+function getPrevElementSibling(node){
+  let p = node ? node.previousSibling : null;
+  while (p && p.nodeType !== 1) p = p.previousSibling;
+  return p && p.nodeType === 1 ? p : null;
 }
 
-function wrapSelectionToCbline(){
+function isPlainlineEffectivelyEmpty(pl){
+  const t = (pl.textContent || "").replaceAll(ZWSP,"").trim();
+  return t.length === 0;
+}
+
+function isCaretAtStartOfElement(el){
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) return false;
-  const text = sel.toString();
-  if (!text) return false;
+  const range = sel.getRangeAt(0);
+  if (!sel.isCollapsed) return false;
+  if (!el.contains(range.startContainer)) return false;
 
-  // replace selection with cbline at cursor line
-  const line = getCurrentLineEl();
-  if (!line) return false;
-
-  const cb = makeCbLine(text);
-  line.replaceWith(cb);
-
-  // add next plain line
-  const pl = makePlainLine("");
-  cb.after(pl);
-  focusToPlainlineStart(pl);
-  return true;
+  const pre = range.cloneRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(range.startContainer, range.startOffset);
+  const s = pre.toString().replaceAll(ZWSP,"");
+  return s.length === 0;
 }
 
-function toggleLineToCb(){
-  const line = getCurrentLineEl();
-  if (!line) return false;
+function cblineToPlainline(cbline){
+  const cbtext = cbline.querySelector(".cbtext");
+  const text = (cbtext?.textContent || "").replaceAll(ZWSP,"");
+  const pl = makePlainLine(text.trim() ? text : "");
+  cbline.replaceWith(pl);
+  setTimeout(()=>setCaretToStart(pl),0);
+}
 
-  if (line.classList.contains("cbline")){
-    // already cbline -> toggle checked
-    line.classList.toggle("checked");
+/* Enter：cbline内だけ自前で分割 */
+function handleEnterInsideCbline(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  if (!sel.isCollapsed) return false;
+
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
+
+  const cbline = node?.closest?.(".cbline");
+  if (!cbline) return false;
+
+  const cbtext = cbline.querySelector(".cbtext");
+  pushUndoSnapshot();
+
+  if (!cbtext){
+    const pl = makePlainLine("");
+    cbline.after(pl);
+    setTimeout(()=>setCaretToStart(pl),0);
+    draftHtml = cleanHtml(editor.innerHTML);
     updateDirtyFlag();
     schedulePushSnapshot();
     return true;
   }
-  // convert to cbline
-  const text = (line.textContent || "");
-  const cb = makeCbLine(text);
-  line.replaceWith(cb);
-  const pl = makePlainLine("");
-  cb.after(pl);
-  focusToPlainlineStart(pl);
-  return true;
-}
 
-/* ---- Enter 根治 + Backspace/Deleteでチェック解除（Gboard対策込み） ---- */
-function isCaretAtStartOf(el){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return false;
-  const r = sel.getRangeAt(0);
-  if (!r.collapsed) return false;
-  // if startContainer is el itself
-  if (r.startContainer === el && r.startOffset === 0) return true;
+  const full = cbtext.textContent || "";
+  let caret = null;
+  try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
+  const cut = (caret == null) ? full.length : Math.max(0, Math.min(caret, full.length));
 
-  // if inside text node
-  const tmp = document.createRange();
-  tmp.selectNodeContents(el);
-  tmp.setEnd(r.startContainer, r.startOffset);
-  const s = tmp.toString();
-  return s.length === 0;
-}
+  /* ★先頭Enter：空のcblineを作らず、上にplainlineを作る */
+  if (cut === 0){
+    const plUp = makePlainLine("");
+    cbline.before(plUp);
+    setTimeout(()=>setCaretToStart(plUp),0);
 
-function handleEnterInsideCbline(){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return false;
-  const line = getCurrentLineEl();
-  if (!line || !line.classList.contains("cbline")) return false;
-  const tx = line.querySelector(".cbtext");
-  if (!tx) return false;
-
-  const atStart = isCaretAtStartOf(tx);
-  if (atStart){
-    // cbline先頭 Enter：空cbline作らない → 上にplainlineを作る
-    const pl = makePlainLine("");
-    line.before(pl);
-    focusToPlainlineStart(pl);
+    draftHtml = cleanHtml(editor.innerHTML);
+    updateDirtyFlag();
+    schedulePushSnapshot();
     return true;
   }
 
-  // split: extract text after caret from cbtext
-  const r = sel.getRangeAt(0);
-  const before = document.createRange();
-  before.selectNodeContents(tx);
-  before.setEnd(r.startContainer, r.startOffset);
-  const after = document.createRange();
-  after.selectNodeContents(tx);
-  after.setStart(r.startContainer, r.startOffset);
+  const left = full.slice(0, cut);
+  const right = full.slice(cut);
 
-  const afterText = after.toString();
+  cbtext.textContent = left;
 
-  // delete after part from cbtext
-  after.deleteContents();
+  const pl = makePlainLine(right);
+  cbline.after(pl);
+  setTimeout(()=>setCaretToStart(pl),0);
 
-  const pl = makePlainLine(afterText);
-  line.after(pl);
-  focusToPlainlineStart(pl);
+  draftHtml = cleanHtml(editor.innerHTML);
+  updateDirtyFlag();
+  schedulePushSnapshot();
   return true;
 }
 
-function handleBackspaceDeleteAroundCbline(key){
-  const line = getCurrentLineEl();
-  if (!line || !line.classList.contains("cbline")) return false;
-  const tx = line.querySelector(".cbtext");
-  if (!tx) return false;
+/* Backspace/Delete：cbline先頭 or 「cbline直後の空行先頭」ならチェック解除 */
+function handleBackspaceDeleteAroundCbline(kind /* "Backspace" | "Delete" */){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
+  if (!sel.isCollapsed) return false;
 
-  const atStart = isCaretAtStartOf(tx);
-  if (!atStart) return false;
+  const range = sel.getRangeAt(0);
+  let node = range.startContainer;
+  if (!node) return false;
+  if (node.nodeType === 3) node = node.parentNode;
 
-  // at start: Backspace/Delete should turn cbline back to plainline (unchecked)
-  const text = tx.textContent || "";
-  const pl = makePlainLine(text);
-  line.replaceWith(pl);
-  focusToPlainlineStart(pl);
+  const cbline = node?.closest?.(".cbline");
+  if (cbline){
+    const cbtext = cbline.querySelector(".cbtext");
+    if (!cbtext) return false;
+
+    let caret = null;
+    try{ caret = getCaretOffsetInElement(cbtext); }catch(_){ caret = null; }
+    const atStart = (caret == null) ? true : (caret === 0);
+
+    if (atStart && (kind === "Backspace" || kind === "Delete")){
+      pushUndoSnapshot();
+      cblineToPlainline(cbline);
+      draftHtml = cleanHtml(editor.innerHTML);
+      updateDirtyFlag();
+      schedulePushSnapshot();
+      return true;
+    }
+    return false;
+  }
+
+  /* ★ここが今回の本命：チェック化直後は「cblineの次のplainline」に居ることが多い */
+  const pl = node?.closest?.(".plainline");
+  if (!pl) return false;
+
+  if (!isCaretAtStartOfElement(pl)) return false;
+
+  const prev = getPrevElementSibling(pl);
+  if (!prev || !prev.classList?.contains("cbline")) return false;
+
+  pushUndoSnapshot();
+
+  /* 空のplainlineなら消してからチェック解除（余計な空白が残らない） */
+  if (isPlainlineEffectivelyEmpty(pl)) pl.remove();
+
+  cblineToPlainline(prev);
+
+  draftHtml = cleanHtml(editor.innerHTML);
+  updateDirtyFlag();
+  schedulePushSnapshot();
   return true;
 }
 
 /* ★beforeinput：Android(Gboard)はここが本命 */
 editor.addEventListener("beforeinput", (e)=>{
+  // ★チェック化直後だけ selection がズレるので、最初に補正
+  runPostCbFix();
+
   const t = e.inputType || "";
   const data = (typeof e.data === "string") ? e.data : "";
 
@@ -1227,7 +1069,7 @@ editor.addEventListener("beforeinput", (e)=>{
   }
 
   if (t === "deleteContentForward"){
-       const handled = handleBackspaceDeleteAroundCbline("Delete");
+    const handled = handleBackspaceDeleteAroundCbline("Delete");
     if (handled){
       e.preventDefault();
       e.stopPropagation();
@@ -1256,651 +1098,655 @@ editor.addEventListener("keydown", (e)=>{
   }
 });
 
-/* input：Androidが勝手に作る div/br を line 化 */
+/* input */
 editor.addEventListener("input", ()=>{
-  // convert stray <div><br></div> to plainline
-  const els = [...editor.querySelectorAll("div")];
-  els.forEach(el=>{
-    if (el.classList.contains("line")) return;
-    // plain div inside editor -> convert
-    const txt = (el.textContent || "");
-    const pl = makePlainLine(txt);
-    el.replaceWith(pl);
+  // Androidが勝手に空div/brを混ぜたら plainline に回収
+  editor.querySelectorAll(".cbline").forEach(line=>{
+    const next = line.nextSibling;
+    if (next && next.nodeType === 1){
+      const el = next;
+      if (el.tagName === "DIV" && !el.classList.contains("plainline") && !el.classList.contains("cbline")){
+        const html = (el.innerHTML || "").toLowerCase().replace(/\s/g,"");
+        if (html === "<br>" || html === "<br/>" || html === ""){
+          const pl = makePlainLine("");
+          el.replaceWith(pl);
+        }
+      }
+    }
   });
 
-  const brOnly = [...editor.childNodes].filter(n=>n.nodeType===1 && n.tagName==="BR");
-  brOnly.forEach(br=>{
-    br.replaceWith(makePlainLine(""));
-  });
-
-  if (editor.childNodes.length === 0){
-    editor.appendChild(makePlainLine(""));
-  }
-
+  draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
+  schedulePushSnapshot();
+});
+elTitle.addEventListener("input", ()=>{
+  draftTitle = elTitle.value || "";
+  updateDirtyFlag();
+  schedulePushSnapshot();
 });
 
-/* ===== formatting ===== */
-function applyInline(tag, styleObj){
-  const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
-  const r = sel.getRangeAt(0);
-  if (r.collapsed) return;
+/* color */
+function applyColor(color){
+  pushUndoSnapshot();
+  editor.focus();
+  try{ document.execCommand("styleWithCSS", false, true); }catch(_){}
+  document.execCommand("foreColor", false, color);
 
-  const span = document.createElement(tag);
-  if (styleObj){
-    Object.keys(styleObj).forEach(k=>{
-      span.style[k] = styleObj[k];
-    });
-  }
-  try{
-    r.surroundContents(span);
-  }catch(e){
-    // fallback: extract and wrap
-    const frag = r.extractContents();
-    span.appendChild(frag);
-    r.insertNode(span);
-  }
-  sel.removeAllRanges();
-  const nr = document.createRange();
-  nr.selectNodeContents(span);
-  nr.collapse(false);
-  sel.addRange(nr);
-
+  draftHtml = cleanHtml(editor.innerHTML);
   updateDirtyFlag();
   schedulePushSnapshot();
 }
-
-/* ===== editor open/save/undo ===== */
-function openEditor(id){
-  const m = getMemoById(id);
-  if (!m) return;
-
-  view.editingId = id;
-  view.dirty = false;
-  view.lastSavedSnapshot = null;
-  view.undoStack = [];
-  view.redoStack = [];
-
-  titleInput.value = m.title || "";
-
-  editor.innerHTML = "";
-  // load html -> rebuild lines
-  const tmp = document.createElement("div");
-  tmp.innerHTML = m.html || "";
-  // if stored as raw text (no .line)
-  if (tmp.querySelector(".line")){
-    editor.innerHTML = tmp.innerHTML;
-  }else{
-    const txt = (tmp.textContent || "");
-    const lines = txt.split(/\r?\n/);
-    lines.forEach(ln=>{
-      editor.appendChild(makePlainLine(ln));
-    });
-    if (lines.length === 0) editor.appendChild(makePlainLine(""));
-  }
-
-  // rebind cbbox clicks (because innerHTML loaded)
-  [...editor.querySelectorAll(".cbline")].forEach(row=>{
-    const box = row.querySelector(".cbbox");
-    if (box && !box._bound){
-      box._bound = true;
-      box.addEventListener("click", (ev)=>{
-        ev.stopPropagation();
-        row.classList.toggle("checked");
-        updateDirtyFlag();
-        schedulePushSnapshot();
-      });
-    }
-  });
-
-  ensureLinesStructure();
-
-  editorWrap.classList.add("show");
-  dirtyHint.style.display = "none";
-
-  // focus rule: existing memo -> body focus
-  requestAnimationFrame(()=>{
-    editor.focus();
-    // caret at end of last line
-    const last = editor.querySelector(".line:last-child");
-    if (last){
-      if (last.classList.contains("cbline")){
-        const tx = last.querySelector(".cbtext");
-        if (tx) setCaretToEnd(tx);
-      }else{
-        setCaretToEnd(last);
-      }
-    }
-  });
-
-  pushSnapshot("open");
-  updateTitleBar();
-}
-
-function openNewMemo(){
-  const id = genId();
-  const m = {
-    id,
-    title: "",
-    html: "",
-    createdAt: nowTs(),
-    updatedAt: nowTs(),
-    pinned:false,
-  };
-  state.memos.unshift(m);
-  // normal order: new memo at head
-  state.normalOrderIds = [id, ...state.normalOrderIds.filter(x=>x!==id)];
-  saveState();
-  renderList();
-
-  view.editingId = id;
-  view.dirty = false;
-  view.lastSavedSnapshot = null;
-  view.undoStack = [];
-  view.redoStack = [];
-
-  titleInput.value = "";
-
-  editor.innerHTML = "";
-  editor.appendChild(makePlainLine(""));
-
-  editorWrap.classList.add("show");
-  dirtyHint.style.display = "none";
-
-  // focus rule: new memo -> title focus
-  requestAnimationFrame(()=>{
-    titleInput.focus();
-    titleInput.select();
-  });
-
-  pushSnapshot("openNew");
-  updateTitleBar();
-}
-
-function closeEditor(){
-  editorWrap.classList.remove("show");
-  view.editingId = null;
-  view.dirty = false;
-  view.lastSavedSnapshot = null;
-  view.undoStack = [];
-  view.redoStack = [];
-  updateTitleBar();
-}
-
-function serializeEditorHtml(){
-  // store as html of lines (preserve check state)
-  return editor.innerHTML;
-}
-function updateDirtyFlag(){
-  if (!view.editingId) return;
-  const snap = getCurrentSnapshot();
-  const changed = (view.lastSavedSnapshot !== snap);
-  view.dirty = changed;
-  dirtyHint.style.display = view.dirty ? "" : "none";
-}
-
-function getCurrentSnapshot(){
-  const title = titleInput.value || "";
-  const html = serializeEditorHtml();
-  return JSON.stringify({title, html});
-}
-
-let pushTimer = null;
-function schedulePushSnapshot(){
-  clearTimeout(pushTimer);
-  pushTimer = setTimeout(()=>{
-    pushSnapshot("edit");
-  }, 220);
-}
-
-function pushSnapshot(reason){
-  if (!view.editingId) return;
-  const snap = getCurrentSnapshot();
-  const last = view.undoStack[view.undoStack.length-1];
-  if (last && last.snap === snap) return;
-  view.undoStack.push({snap, reason, at: nowTs()});
-  if (view.undoStack.length > 120) view.undoStack.shift();
-  view.redoStack = [];
-}
-
-function restoreSnapshot(snapStr){
-  try{
-    const obj = JSON.parse(snapStr);
-    titleInput.value = obj.title || "";
-    editor.innerHTML = obj.html || "";
-    // rebind cbbox click
-    [...editor.querySelectorAll(".cbline")].forEach(row=>{
-      const box = row.querySelector(".cbbox");
-      if (box && !box._bound){
-        box._bound = true;
-        box.addEventListener("click", (ev)=>{
-          ev.stopPropagation();
-          row.classList.toggle("checked");
-          updateDirtyFlag();
-          schedulePushSnapshot();
-        });
-      }
-    });
-    ensureLinesStructure();
-    updateDirtyFlag();
-  }catch(e){}
-}
-
-function doUndo(){
-  if (view.undoStack.length <= 1) return;
-  const cur = view.undoStack.pop();
-  view.redoStack.push(cur);
-  const prev = view.undoStack[view.undoStack.length-1];
-  restoreSnapshot(prev.snap);
-}
-function doRedo(){
-  if (view.redoStack.length === 0) return;
-  const item = view.redoStack.pop();
-  view.undoStack.push(item);
-  restoreSnapshot(item.snap);
-}
-
-function saveCurrentMemo(){
-  const id = view.editingId;
-  if (!id) return;
-  const m = getMemoById(id);
-  if (!m) return;
-  m.title = titleInput.value || "";
-  m.html = serializeEditorHtml();
-  m.updatedAt = nowTs();
-
-  // 保存時の並び：通常メモは更新順セクション先頭へ（normalOrderIds先頭）
-  if (!m.pinned){
-    state.normalOrderIds = [id, ...state.normalOrderIds.filter(x=>x!==id)];
-  }
-
-  saveState();
-  view.lastSavedSnapshot = getCurrentSnapshot();
-  updateDirtyFlag();
-  toast("保存しました");
-  renderList();
-  updateTitleBar();
-}
-
-function deleteCurrentMemo(){
-  const id = view.editingId;
-  if (!id) return;
-  const m = getMemoById(id);
-  if (!m) return;
-
-  openModal({
-    title:"削除",
-    text:`「${normalizeTitle(m.title)}」を削除します。よろしいですか？`,
-    buttons:[
-      {text:"キャンセル", className:"", onClick:()=>{}},
-      {text:"削除", className:"danger", onClick:()=>{
-        state.memos = state.memos.filter(x=>x.id!==id);
-        state.pinnedIds = state.pinnedIds.filter(x=>x!==id);
-        state.normalOrderIds = state.normalOrderIds.filter(x=>x!==id);
-        saveState();
-        closeEditor();
-        renderList();
-        toast("削除しました");
-      }}
-    ]
-  });
-}
-
-function confirmCloseEditor(){
-  if (!view.dirty){
-    closeEditor();
-    return;
-  }
-  openModal({
-    title:"未保存",
-    text:"保存されていません。破棄して戻りますか？",
-    buttons:[
-      {text:"キャンセル", onClick:()=>{}},
-      {text:"破棄して戻る", className:"danger", onClick:()=>closeEditor()},
-    ]
-  });
-}
-
-function updateTitleBar(){
-  if (editorWrap.classList.contains("show")){
-    topTitle.textContent = "編集";
-  }else{
-    topTitle.textContent = "メモ";
-  }
-}
-
-/* ===== export / import ===== */
-async function exportSelected(){
-  const ids = [...view.selected];
-  if (ids.length === 0){ toast("選択がありません"); return; }
-
-  const memos = ids.map(id=>getMemoById(id)).filter(Boolean);
-  if (memos.length === 0){ toast("選択がありません"); return; }
-
-  if (memos.length === 1){
-    const m = memos[0];
-    const name = makeSafeFilename(normalizeTitle(m.title));
-    const txt = htmlToText(m.html);
-    downloadBlob(`${name}.txt`, new Blob([txt], {type:"text/plain"}));
-    toast("txtを書き出しました");
-    return;
-  }
-
-  // zip (store method)
-  const entries = memos.map((m, idx)=>{
-    const base = makeSafeFilename(normalizeTitle(m.title));
-    return { name: `${dedupeName(base, idx, memos)}.txt`, text: htmlToText(m.html) };
-  });
-
-  const zipBlob = makeSimpleZip(entries);
-  downloadBlob(`memos_${Date.now()}.zip`, zipBlob);
-  toast("zipを書き出しました");
-}
-
-function dedupeName(base, idx, memos){
-  // 同名があれば無題1/無題2 的に
-  const seen = new Map();
-  memos.forEach(mm=>{
-    const b = makeSafeFilename(normalizeTitle(mm.title));
-    seen.set(b, (seen.get(b)||0)+1);
-  });
-  if ((seen.get(base)||0) <= 1) return base;
-  // count occurrences in order
-  let n = 0;
-  for (let i=0;i<=idx;i++){
-    const b = makeSafeFilename(normalizeTitle(memos[i].title));
-    if (b===base) n++;
-  }
-  return `${base}${n}`;
-}
-
-function htmlToText(html){
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html || "";
-  // convert cbline to checkbox symbol
-  [...tmp.querySelectorAll(".cbline")].forEach(row=>{
-    const checked = row.classList.contains("checked");
-    const tx = row.querySelector(".cbtext");
-    const t = (tx ? tx.textContent : row.textContent) || "";
-    row.replaceWith(document.createTextNode((checked?"☑ ":"☐ ") + t));
-  });
-  // plain lines -> join by newline
-  const lines = [...tmp.querySelectorAll(".line")].map(el=>{
-    return (el.textContent || "").replace(/\u00a0/g," ");
-  });
-  if (lines.length) return lines.join("\n");
-  return (tmp.textContent || "");
-}
-
-/* simple ZIP (store) */
-function crc32(buf){
-  let c = ~0;
-  for (let i=0;i<buf.length;i++){
-    c ^= buf[i];
-    for (let k=0;k<8;k++){
-      c = (c>>>1) ^ (0xEDB88320 & -(c & 1));
-    }
-  }
-  return ~c >>> 0;
-}
-function u16(n){ return [n&255,(n>>>8)&255]; }
-function u32(n){ return [n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]; }
-
-function makeSimpleZip(entries){
-  // entries: [{name, text}]
-  const encoder = new TextEncoder();
-  const files = entries.map(ent=>{
-    const nameBytes = encoder.encode(ent.name);
-    const dataBytes = encoder.encode(ent.text);
-    const crc = crc32(dataBytes);
-    return {nameBytes, dataBytes, crc};
-  });
-
-  let offset = 0;
-  const chunks = [];
-  const central = [];
-
-  files.forEach(f=>{
-    const localHeader = [
-      ...u32(0x04034b50),
-      ...u16(20), ...u16(0), ...u16(0),
-      ...u16(0), ...u16(0),
-      ...u32(f.crc),
-      ...u32(f.dataBytes.length),
-      ...u32(f.dataBytes.length),
-      ...u16(f.nameBytes.length),
-      ...u16(0),
-    ];
-    chunks.push(new Uint8Array(localHeader));
-    chunks.push(f.nameBytes);
-    chunks.push(f.dataBytes);
-
-    const centralHeader = [
-      ...u32(0x02014b50),
-      ...u16(20), ...u16(20),
-      ...u16(0), ...u16(0),
-      ...u16(0), ...u16(0),
-      ...u32(f.crc),
-      ...u32(f.dataBytes.length),
-      ...u32(f.dataBytes.length),
-      ...u16(f.nameBytes.length),
-      ...u16(0), ...u16(0),
-      ...u16(0), ...u16(0),
-      ...u32(0),
-      ...u32(offset),
-    ];
-    central.push(new Uint8Array(centralHeader));
-    central.push(f.nameBytes);
-
-    offset += localHeader.length + f.nameBytes.length + f.dataBytes.length;
-  });
-
-  const centralSize = central.reduce((a,c)=>a + c.length, 0);
-  const centralOffset = offset;
-
-  const end = [
-    ...u32(0x06054b50),
-    ...u16(0), ...u16(0),
-    ...u16(files.length),
-    ...u16(files.length),
-    ...u32(centralSize),
-    ...u32(centralOffset),
-    ...u16(0),
-  ];
-
-  const blobParts = [...chunks, ...central, new Uint8Array(end)];
-  return new Blob(blobParts, {type:"application/zip"});
-}
-
-async function importFiles(files){
-  if (!files || files.length === 0) return;
-
-  const list = [...files];
-  // JSON優先：置換インポート
-  const jsonFile = list.find(f=>f.name.toLowerCase().endsWith(".json"));
-  if (jsonFile){
-    const text = await jsonFile.text();
-    try{
-      const obj = JSON.parse(text);
-      if (obj && typeof obj === "object"){
-        // minimal validation
-        if (Array.isArray(obj.memos)){
-          state = {
-            memos: obj.memos,
-            pinnedIds: Array.isArray(obj.pinnedIds) ? obj.pinnedIds : [],
-            normalOrderIds: Array.isArray(obj.normalOrderIds) ? obj.normalOrderIds : [],
-          };
-          saveState();
-          renderList();
-          toast("JSONをインポートしました（置換）");
-          return;
-        }
-      }
-      toast("JSON形式が不正です");
-    }catch(e){
-      toast("JSONの読み込みに失敗");
-    }
-    return;
-  }
-
-  // TXT複数：1ファイル=1メモとして追加
-  const txtFiles = list.filter(f=>f.name.toLowerCase().endsWith(".txt"));
-  if (txtFiles.length){
-    for (const f of txtFiles){
-      const text = await f.text();
-      const id = genId();
-      const title = f.name.replace(/\.txt$/i,"");
-      const html = textToHtml(text);
-      const memo = {id, title, html, createdAt: nowTs(), updatedAt: nowTs(), pinned:false};
-      state.memos.unshift(memo);
-      state.normalOrderIds = [id, ...state.normalOrderIds.filter(x=>x!==id)];
-    }
-    saveState();
-    renderList();
-    toast("TXTを追加しました");
-    return;
-  }
-
-  toast("対応形式: .json / .txt");
-}
-
-function textToHtml(text){
-  const lines = (text||"").replace(/\r\n/g,"\n").replace(/\r/g,"\n").split("\n");
-  const tmp = document.createElement("div");
-  lines.forEach(ln=>{
-    if (ln.startsWith("☑ ") || ln.startsWith("☐ ")){
-      const checked = ln.startsWith("☑ ");
-      const body = ln.slice(2);
-      const row = makeCbLine(body);
-      if (checked) row.classList.add("checked");
-      tmp.appendChild(row);
-    }else{
-      tmp.appendChild(makePlainLine(ln));
-    }
-  });
-  return tmp.innerHTML;
-}
-
-/* ===== export full json ===== */
-function exportAllJson(){
-  const json = JSON.stringify(state, null, 2);
-  downloadBlob(`offline-memo-final_${Date.now()}.json`, new Blob([json], {type:"application/json"}));
-  toast("JSONを書き出しました");
-}
-
-/* ===== UI events ===== */
-searchEl.addEventListener("input", ()=>{
-  view.query = searchEl.value || "";
-  renderList();
-});
-
-btnNew.addEventListener("click", ()=>{
-  stopSelecting();
-  openNewMemo();
-});
-
-btnSelToggle.addEventListener("click", ()=>{
-  if (view.selecting) stopSelecting();
-  else startSelecting();
-  renderList();
-});
-
-btnExport.addEventListener("click", ()=>{
-  if (view.selecting && view.selected.size){
-    exportSelected();
-    return;
-  }
-  openModal({
-    title:"書き出し",
-    text:"選択中なら選択メモを書き出します。選択がない場合は全体JSONを書き出します。",
-    buttons:[
-      {text:"キャンセル", onClick:()=>{}},
-      {text:"全体JSON", className:"primary", onClick:()=>exportAllJson()},
-      {text:"選択を書き出し", onClick:()=>{
-        if (!view.selecting || view.selected.size===0){
-          toast("選択がありません");
-          return;
-        }
-        exportSelected();
-      }},
-    ]
-  });
-});
-
-btnImport.addEventListener("click", ()=>{
-  openModal({
-    title:"読み込み",
-    text:"JSONは置換、TXTは追加です。",
-    buttons:[
-      {text:"キャンセル", onClick:()=>{}},
-      {text:"ファイル選択", className:"primary", onClick:()=>{
-        filePicker.value = "";
-        filePicker.click();
-      }},
-    ]
-  });
-});
-filePicker.addEventListener("change", async ()=>{
-  const files = filePicker.files;
-  await importFiles(files);
-});
-
-btnBack.addEventListener("click", ()=> confirmCloseEditor());
-btnUndo.addEventListener("click", ()=>{ doUndo(); });
-btnRedo.addEventListener("click", ()=>{ doRedo(); });
-btnSave.addEventListener("click", ()=>{ saveCurrentMemo(); });
-btnDelete.addEventListener("click", ()=>{ deleteCurrentMemo(); });
-
-btnBold.addEventListener("click", ()=>{
-  editor.focus();
-  applyInline("span", {fontWeight:"700"});
+btnBlack.addEventListener("click", ()=>{
+  btnBlack.classList.add("active");
+  btnRed.classList.remove("active");
+  applyColor("#111111");
 });
 btnRed.addEventListener("click", ()=>{
-  editor.focus();
-  applyInline("span", {color:"#d11"});
+  btnRed.classList.add("active");
+  btnBlack.classList.remove("active");
+  applyColor("#d23b3b");
 });
+
+/* 行取得 */
+function getCurrentBlockInEditor(){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+
+  let node = range.startContainer;
+  if (!node) return null;
+
+  if (node.nodeType === 3){
+    const parent = node.parentNode;
+    if (parent === editor){
+      const wrap = document.createElement("div");
+      editor.insertBefore(wrap, node);
+      wrap.appendChild(node);
+      return wrap;
+    }
+    node = parent;
+  }
+
+  const pl = node.closest?.(".plainline");
+  if (pl) return pl;
+
+  const cb = node.closest?.(".cbline");
+  if (cb) return cb;
+
+  while (node && node !== editor){
+    const tag = (node.tagName||"").toUpperCase();
+    if (tag === "DIV" || tag === "P" || tag === "LI") return node;
+    node = node.parentNode;
+  }
+  return null;
+}
 
 /* checkbox button：選択 or 行 */
 btnCb.addEventListener("click", ()=>{
   editor.focus();
 
-  const selText = getSelectionText().trim();
-  if (selText){
-    const ok = wrapSelectionToCbline();
-    if (!ok){
-      toast("チェック化できませんでした");
-      return;
-    }
-    updateDirtyFlag();
-    schedulePushSnapshot();
-    return;
-  }
-
-  const ok = toggleLineToCb();
-  if (!ok){
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0){
     toast("文字を選択するか、行にカーソルを置いて押してね");
     return;
   }
+
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)){
+    toast("本文内で操作してね");
+    return;
+  }
+
+  const makeLine = (text)=>{
+    const line = document.createElement("div");
+    line.className = "cbline";
+    line.setAttribute("data-done","false");
+
+    const box = document.createElement("span");
+    box.className = "cbox";
+    box.textContent = "☐";
+    box.contentEditable = "false";
+
+    const span = document.createElement("span");
+    span.className = "cbtext";
+    span.textContent = text;
+
+    line.appendChild(box);
+    line.appendChild(span);
+    return line;
+  };
+
+  const focusToPlainlineStart = (pl)=>{
+    // Gboardは「直後の1打」でキャレットがズレることがあるので、複数回固定する
+    const fix = ()=>{
+      editor.focus();
+      setCaretToStart(pl);
+    };
+    fix();
+    setTimeout(fix, 0);
+    requestAnimationFrame(fix);
+    setTimeout(fix, 40);
+  };
+
+  const selectedText = sel.toString().trim();
+  pushUndoSnapshot();
+
+  if (selectedText){
+    // 選択テキスト → cbline化
+    const line = makeLine(selectedText);
+    range.deleteContents();
+    range.insertNode(line);
+
+    // 次行を必ず plainline にして、そこへキャレット
+    const pl = makePlainLine("");
+    line.after(pl);
+
+    sel.removeAllRanges();
+    const r2 = document.createRange();
+    r2.selectNodeContents(pl);
+    r2.collapse(true);
+    sel.addRange(r2);
+
+    focusToPlainlineStart(pl);
+
+  }else{
+    // カーソル行 → cbline化 or 既存cblineならトグル
+    const block = getCurrentBlockInEditor();
+    if (!block){
+      toast("行にカーソルを置いて押してね");
+      return;
+    }
+
+    if (block.classList?.contains("cbline")){
+      toggleCbLine(block);
+      draftHtml = cleanHtml(editor.innerHTML);
+      updateDirtyFlag();
+      schedulePushSnapshot();
+      return;
+    }
+
+    const text = (block.textContent||"").replaceAll(ZWSP,"").trim();
+    if (!text){
+      toast("空の行はチェック化できないよ");
+      return;
+    }
+
+    const line = makeLine(text);
+    block.replaceWith(line);
+
+    // ★ここが大事：行置換ルートでも「次行plainline」を作ってキャレットを逃がす
+    const pl = makePlainLine("");
+    line.after(pl);
+    focusToPlainlineStart(pl);
+  }
+
+  draftHtml = cleanHtml(editor.innerHTML);
+  normalizeCbLines(editor);
   updateDirtyFlag();
   schedulePushSnapshot();
 });
 
-/* ===== back key (Android) ===== */
-window.addEventListener("popstate", (e)=>{
-  if (editorWrap.classList.contains("show")){
-    history.pushState(null, "", location.href);
-    confirmCloseEditor();
-  }
-});
-function enableBackIntercept(){
-  history.pushState(null, "", location.href);
+/* save/back/delete */
+function confirmDiscardIfDirty(){
+  if (!dirty) return true;
+  return confirm("更新は破棄されますがよろしいですか？");
 }
-enableBackIntercept();
+function saveCurrent(){
+  const note = getNote(currentId);
+  if (!note) return;
 
-/* ===== init ===== */
-loadState();
-renderList();
+  syncDraftFromCurrent();
+
+  note.title = draftTitle;
+  note.bodyHtml = draftHtml;
+  note.updatedAt = nowTs();
+
+  if (!isPinned(note.id)){
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==note.id);
+    store.normalOrderIds.unshift(note.id);
+  }
+
+  saveStore();
+
+  savedTitle = draftTitle;
+  savedHtml  = draftHtml;
+  updateDirtyFlag();
+
+  toast("保存しました");
+  resetUndoRedo();
+}
+
+btnSave.addEventListener("click", ()=> saveCurrent());
+btnBack.addEventListener("click", ()=>{
+  if (!confirmDiscardIfDirty()) return;
+  showList();
+});
+btnDeleteInEdit.addEventListener("click", ()=>{
+  const note = getNote(currentId);
+  if (!note) return;
+  const name = (note.title||"").trim() ? note.title : "（無題）";
+  if (!confirm(`「${name}」を削除しますか？\nよろしいですか？`)) return;
+  deleteNotes([note.id]);
+  showList();
+});
+
+/* =========================
+   Export/Import + ZIP + Drag + SW update + boot
+   ========================= */
+
+/* Export modal */
+function openExportModal(){ exportModalBg.classList.add("show"); }
+function closeExportModal(){ exportModalBg.classList.remove("show"); }
+btnExport.addEventListener("click", ()=>{
+  if (!screenEdit.classList.contains("hidden") && dirty){
+    const ok = confirm("編集中の未保存内容があります。\n保存せずにExportすると未保存分は入りません。\n続けますか？");
+    if (!ok) return;
+  }
+  openExportModal();
+});
+btnModalCancel.addEventListener("click", ()=> closeExportModal());
+exportModalBg.addEventListener("click", (e)=>{ if (e.target === exportModalBg) closeExportModal(); });
+
+/* backup json */
+btnDoBackup.addEventListener("click", ()=>{
+  closeExportModal();
+  const payload = { version: 1, exportedAt: nowTs(), data: store };
+  const json = JSON.stringify(payload, null, 2);
+  const blob = new Blob([json], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `offline-memo-backup-${stampForFile()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(()=> URL.revokeObjectURL(url), 800);
+  toast("バックアップを書き出しました");
+});
+
+/* ---- ZIP（store） ---- */
+function crc32Table(){
+  const table = new Uint32Array(256);
+  for (let i=0;i<256;i++){
+    let c=i;
+    for (let k=0;k<8;k++){
+      c = (c & 1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+    }
+    table[i]=c>>>0;
+  }
+  return table;
+}
+const CRC_TABLE = crc32Table();
+
+function crc32(u8){
+  let c = 0xFFFFFFFF;
+  for (let i=0;i<u8.length;i++){
+    c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c>>>8);
+  }
+  return (c ^ 0xFFFFFFFF)>>>0;
+}
+function u16(n){ return new Uint8Array([n & 255, (n>>>8)&255]); }
+function u32(n){ return new Uint8Array([n & 255, (n>>>8)&255, (n>>>16)&255, (n>>>24)&255]); }
+function concat(chunks){
+  const total = chunks.reduce((s,c)=>s + c.length, 0);
+  const out = new Uint8Array(total);
+  let o=0;
+  for (const c of chunks){ out.set(c, o); o+=c.length; }
+  return out;
+}
+function strU8(s){ return new TextEncoder().encode(s); }
+
+function zipStore(files){
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+
+  for (const f of files){
+    const nameU8 = strU8(f.name);
+    const dataU8 = f.data;
+    const crc = crc32(dataU8);
+    const size = dataU8.length;
+
+    const local = concat([
+      u32(0x04034b50),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0), u16(0),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameU8.length),
+      u16(0),
+      nameU8,
+      dataU8
+    ]);
+    locals.push(local);
+
+    const central = concat([
+      u32(0x02014b50),
+      u16(20), u16(20),
+      u16(0),
+      u16(0),
+      u16(0), u16(0),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameU8.length),
+      u16(0), u16(0),
+      u16(0), u16(0),
+      u32(0),
+      u32(offset),
+      nameU8
+    ]);
+    centrals.push(central);
+
+    offset += local.length;
+  }
+
+  const centralStart = offset;
+  const centralData = concat(centrals);
+
+  const end = concat([
+    u32(0x06054b50),
+    u16(0), u16(0),
+    u16(files.length),
+    u16(files.length),
+    u32(centralData.length),
+    u32(centralStart),
+    u16(0)
+  ]);
+
+  return concat([...locals, centralData, end]);
+}
+
+/* filename helpers */
+function sanitizeFileName(name){
+  return (name||"").replace(/[\\\/:*?"<>|]/g, "_").trim();
+}
+function buildUniqueNames(notes){
+  const counts = new Map();
+  const out = [];
+  for (const n of notes){
+    const baseRaw = (n.title||"").trim() ? n.title.trim() : "無題";
+    const base = sanitizeFileName(baseRaw) || "無題";
+    const key = base.toLowerCase();
+    const c = (counts.get(key) || 0) + 1;
+    counts.set(key, c);
+    out.push(c === 1 ? base : `${base}${c}`);
+  }
+  return out;
+}
+
+/* text export（関数化） */
+function doTextExport(){
+  if (!selectionMode || selectedIds.size === 0){
+    toast("テキスト化するメモを ☑ で選んでね");
+    return;
+  }
+
+  const ids = Array.from(selectedIds);
+  const notes = ids.map(id=>getNote(id)).filter(Boolean);
+  if (!notes.length){
+    setSelectionMode(false);
+    toast("選択が空です");
+    return;
+  }
+
+  const names = buildUniqueNames(notes);
+
+  if (notes.length === 1){
+    const text = htmlToText(notes[0].bodyHtml);
+    const blob = new Blob([text], {type:"text/plain"});
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${names[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 800);
+
+    toast("テキストを書き出しました");
+    setSelectionMode(false);
+    return;
+  }
+
+  const files = notes.map((n,i)=>({
+    name: `${names[i]}.txt`,
+    data: strU8(htmlToText(n.bodyHtml))
+  }));
+
+  const zipU8 = zipStore(files);
+  const blob = new Blob([zipU8], {type:"application/zip"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `offline-memo-text-${stampForFile()}.zip`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1200);
+
+  toast("ZIPを書き出しました");
+  setSelectionMode(false);
+}
+
+/* modal内のテキスト化 */
+btnDoText.addEventListener("click", ()=>{
+  closeExportModal();
+  doTextExport();
+});
+
+/* 上部（選択モード）のテキスト化：直接実行 */
+btnSelText.addEventListener("click", ()=>{
+  doTextExport();
+});
+
+/* Import */
+btnImport.addEventListener("click", ()=>{
+  fileImport.value = "";
+  fileImport.click();
+});
+
+fileImport.addEventListener("change", async ()=>{
+  const files = Array.from(fileImport.files || []);
+  if (!files.length) return;
+
+  const jsonFile = files.find(f => (f.name||"").toLowerCase().endsWith(".json"));
+  if (jsonFile){
+    if (!confirm("インポートすると現在のメモを全て置き換えます。\nよろしいですか？")) return;
+    try{
+      const text = await jsonFile.text();
+      const obj = safeParse(text, null);
+      if (!obj || !obj.data) throw new Error("invalid");
+      store = normalizeStore(obj.data);
+      ensureAtLeastOne();
+      saveStore();
+      toast("インポートしました");
+      setSelectionMode(false);
+      showList();
+    }catch(e){
+      alert("インポート失敗：JSON形式が不正か壊れてます");
+    }
+    return;
+  }
+
+  const txtFiles = files.filter(f => (f.name||"").toLowerCase().endsWith(".txt"));
+  if (!txtFiles.length){
+    alert("対応形式：.json / .txt");
+    return;
+  }
+
+  for (const f of txtFiles){
+    const text = await f.text();
+    const body = escapeHtml(text).replace(/\r?\n/g, "<br>");
+    const title = (f.name||"").replace(/\.txt$/i,"") || "無題";
+    const n = { id: uid(), title, bodyHtml: body, createdAt: nowTs(), updatedAt: nowTs() };
+    store.notes.unshift(n);
+    store.normalOrderIds = store.normalOrderIds.filter(x=>x!==n.id);
+    store.normalOrderIds.unshift(n.id);
+  }
+
+  saveStore();
+  renderList();
+  toast(`.txt を${txtFiles.length}件取り込みました`);
+});
+
+/* Drag */
+let dragState = null;
+
+function attachManualDrag(handleEl, rowEl, note){
+  const HOLD_MS = 220;
+  let timer = null;
+
+  const start = (e)=>{
+    if ((elSearch.value||"").trim()) return;
+    if (selectionMode) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    timer = setTimeout(()=>{
+      beginDrag(rowEl, note);
+
+      document.addEventListener("touchmove", onDragMove, {passive:false});
+      document.addEventListener("touchend", onDragEnd);
+      document.addEventListener("pointermove", onDragMove);
+      document.addEventListener("pointerup", onDragEnd);
+    }, HOLD_MS);
+  };
+
+  const cancel = ()=>{
+    clearTimeout(timer);
+    timer = null;
+  };
+
+  handleEl.addEventListener("touchstart", start, {passive:false});
+  handleEl.addEventListener("touchend", cancel);
+  handleEl.addEventListener("touchmove", cancel);
+
+  handleEl.addEventListener("pointerdown", start);
+  handleEl.addEventListener("pointerup", cancel);
+  handleEl.addEventListener("pointercancel", cancel);
+}
+
+function beginDrag(rowEl, note){
+  const pinned = isPinned(note.id);
+
+  const ghost = document.createElement("div");
+  ghost.className = "ghost";
+  ghost.style.height = rowEl.getBoundingClientRect().height + "px";
+
+  rowEl.after(ghost);
+  rowEl.classList.add("dragging");
+
+  dragState = { rowEl, note, ghost, pinned };
+  toast("ドラッグで並び替え");
+}
+
+function onDragMove(e){
+  if (!dragState) return;
+  if (e.cancelable) e.preventDefault();
+
+  const y = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+
+  const rows = Array.from(notesEl.querySelectorAll(".rowCompact"))
+    .filter(el => el !== dragState.rowEl)
+    .filter(el => {
+      const id = el.dataset.id;
+      return dragState.pinned ? isPinned(id) : !isPinned(id);
+    });
+
+  let target = null;
+  for (const r of rows){
+    const rect = r.getBoundingClientRect();
+    const mid = rect.top + rect.height/2;
+    if (y < mid){ target = r; break; }
+  }
+
+  if (target){
+    notesEl.insertBefore(dragState.ghost, target);
+  }else{
+    const last = rows[rows.length-1];
+    if (last) last.after(dragState.ghost);
+  }
+}
+
+function onDragEnd(){
+  if (!dragState) return;
+
+  document.removeEventListener("touchmove", onDragMove);
+  document.removeEventListener("touchend", onDragEnd);
+  document.removeEventListener("pointermove", onDragMove);
+  document.removeEventListener("pointerup", onDragEnd);
+
+  dragState.rowEl.classList.remove("dragging");
+  dragState.ghost.replaceWith(dragState.rowEl);
+
+  const ids = Array.from(notesEl.querySelectorAll(".rowCompact")).map(el=>el.dataset.id);
+
+  if (dragState.pinned){
+    store.pinnedIds = ids.filter(id=>isPinned(id));
+  }else{
+    store.normalOrderIds = ids.filter(id=>!isPinned(id));
+  }
+
+  saveStore();
+  dragState = null;
+  renderList();
+  toast("並び替えました");
+}
+
+/* hardware back */
+window.addEventListener("popstate", ()=>{
+  const inEdit = !screenEdit.classList.contains("hidden");
+  if (!inEdit) return;
+
+  if (!confirmDiscardIfDirty()){
+    history.pushState({screen:"edit", id: currentId}, "");
+    return;
+  }
+  showList();
+});
+window.addEventListener("beforeunload", (e)=>{
+  if (!dirty) return;
+  e.preventDefault();
+  e.returnValue = "";
+});
+
+/* Update modal */
+let waitingSW = null;
+function openUpdateModal(sw){
+  waitingSW = sw || null;
+  updateModalBg.classList.add("show");
+}
+function closeUpdateModal(){ updateModalBg.classList.remove("show"); }
+
+btnReloadLater.addEventListener("click", ()=> closeUpdateModal());
+btnReloadNow.addEventListener("click", ()=>{
+  if (!screenEdit.classList.contains("hidden") && dirty){
+    const ok = confirm("未保存があります。再起動すると未保存は消えます。\n続けますか？");
+    if (!ok) return;
+  }
+  closeUpdateModal();
+  if (waitingSW) waitingSW.postMessage({type:"SKIP_WAITING"});
+  else location.reload();
+});
+updateModalBg.addEventListener("click", (e)=>{ if (e.target === updateModalBg) closeUpdateModal(); });
+
+/* boot */
+function boot(){
+  ensureAtLeastOne();
+  saveStore();
+  renderList();
+  updateTopActions();
+  history.replaceState({screen:"list"}, "");
+}
+boot();
 
 /* SW register */
 if ("serviceWorker" in navigator) {
@@ -1925,24 +1771,7 @@ if ("serviceWorker" in navigator) {
 
       navigator.serviceWorker.addEventListener("controllerchange", ()=> location.reload());
       setInterval(()=>{ reg.update().catch(()=>{}); }, 60 * 60 * 1000);
-    }catch(e){}
-  });
-}
-
-let pendingSw = null;
-function openUpdateModal(sw){
-  pendingSw = sw;
-  openModal({
-    title:"更新",
-    text:"新しいバージョンがあります。再起動しますか？",
-    buttons:[
-      {text:"あとで", onClick:()=>{}},
-      {text:"再起動", className:"primary", onClick:()=>{
-        try{
-          pendingSw && pendingSw.postMessage({type:"SKIP_WAITING"});
-        }catch(e){}
-      }},
-    ]
+    }catch(_){}
   });
 }
 </script>
